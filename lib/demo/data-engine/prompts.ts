@@ -58,6 +58,13 @@ export const DEMO_DATA_SQL_CONSTRAINTS = `
 - NEVER generate SQL that references its own output table in a CTE or subquery.
   The table being created does NOT exist yet -- you cannot SELECT from it.
 
+## CTE Column Scoping
+- When a CTE aliases a column (e.g., CAST(seq_id AS BIGINT) AS product_id),
+  the original name (seq_id) is NOT available in later CTEs or the final SELECT.
+  You MUST use the new alias (product_id) everywhere downstream.
+- If you need the original value in later CTEs, keep it as a separate column
+  or do not rename it in the earlier CTE.
+
 ## CTAS Format
 - Use a SINGLE CREATE OR REPLACE TABLE ... AS SELECT statement.
   NEVER follow with INSERT INTO -- all data must come from the SELECT.

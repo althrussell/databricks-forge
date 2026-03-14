@@ -27,10 +27,19 @@ interface CompleteStepProps {
   wizardStartTime?: number;
 }
 
-export function CompleteStep({ sessionId, catalog, schema, customerName, industryId, wizardStartTime }: CompleteStepProps) {
+export function CompleteStep({
+  sessionId,
+  catalog,
+  schema,
+  customerName,
+  industryId,
+  wizardStartTime,
+}: CompleteStepProps) {
   const router = useRouter();
   const [session, setSession] = useState<DemoSessionSummary | null>(null);
-  const [launchState, setLaunchState] = useState<"pending" | "launching" | "launched" | "failed">("pending");
+  const [launchState, setLaunchState] = useState<"ready" | "launching" | "launched" | "failed">(
+    "ready",
+  );
   const [launchError, setLaunchError] = useState<string>("");
   const launchedRef = useRef(false);
 
@@ -80,13 +89,6 @@ export function CompleteStep({ sessionId, catalog, schema, customerName, industr
     }
   }, [fqn, customerName, industryId, catalog, router]);
 
-  // Auto-launch as soon as session data loads
-  useEffect(() => {
-    if (session && launchState === "pending") {
-      launchDiscovery();
-    }
-  }, [session, launchState, launchDiscovery]);
-
   const handleCopyFqn = () => {
     navigator.clipboard.writeText(fqn);
     toast.success("Copied to clipboard");
@@ -96,14 +98,29 @@ export function CompleteStep({ sessionId, catalog, schema, customerName, industr
     <div className="space-y-6 px-1">
       {/* Header */}
       <div className="flex flex-col items-center gap-3 py-6">
-        {launchState === "launching" || launchState === "pending" ? (
+        {launchState === "ready" ? (
+          <>
+            <div className="relative">
+              <CheckCircle2 className="h-14 w-14 text-emerald-500" />
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
+                <span className="relative inline-flex h-4 w-4 rounded-full bg-emerald-500" />
+              </span>
+            </div>
+            <h3 className="text-xl font-semibold tracking-tight">Demo Data Ready</h3>
+            <p className="text-sm text-muted-foreground text-center max-w-md">
+              Your demo data has been generated successfully. Review the summary below, then launch
+              the discovery pipeline.
+            </p>
+          </>
+        ) : launchState === "launching" ? (
           <>
             <div className="relative">
               <div className="h-14 w-14 animate-spin rounded-full border-[3px] border-primary/20 border-t-primary" />
             </div>
             <h3 className="text-xl font-semibold tracking-tight">Launching Discovery</h3>
             <p className="text-sm text-muted-foreground text-center max-w-md">
-              Demo data generated successfully. Starting discovery pipeline with environment scan...
+              Starting discovery pipeline with environment scan...
             </p>
           </>
         ) : launchState === "launched" ? (
@@ -123,13 +140,11 @@ export function CompleteStep({ sessionId, catalog, schema, customerName, industr
         ) : (
           <>
             <AlertCircle className="h-14 w-14 text-destructive/60" />
-            <h3 className="text-xl font-semibold tracking-tight">Demo Data Ready</h3>
+            <h3 className="text-xl font-semibold tracking-tight">Launch Failed</h3>
             <p className="text-sm text-muted-foreground text-center max-w-md">
-              Data generated but auto-launch failed. You can launch manually below.
+              Data generated but pipeline launch failed. You can retry below.
             </p>
-            {launchError && (
-              <p className="text-xs text-destructive">{launchError}</p>
-            )}
+            {launchError && <p className="text-xs text-destructive">{launchError}</p>}
           </>
         )}
       </div>
@@ -161,7 +176,9 @@ export function CompleteStep({ sessionId, catalog, schema, customerName, industr
             <div className="rounded-md bg-muted/50 p-2.5 text-center">
               <Clock className="mx-auto h-4 w-4 text-muted-foreground mb-1" />
               <p className="text-lg font-semibold">{Math.round(session.durationMs / 1000)}s</p>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Generation</p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Generation
+              </p>
             </div>
             <div className="rounded-md bg-muted/50 p-2.5 text-center">
               <Clock className="mx-auto h-4 w-4 text-muted-foreground mb-1" />
@@ -170,21 +187,19 @@ export function CompleteStep({ sessionId, catalog, schema, customerName, industr
                   ? `${Math.round((Date.now() - wizardStartTime) / 1000)}s`
                   : `${Math.round(session.durationMs / 1000)}s`}
               </p>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total Time</p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Total Time
+              </p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Fallback manual launch -- only shown on failure */}
-      {launchState === "failed" && (
-        <Button
-          className="w-full gap-2"
-          size="lg"
-          onClick={launchDiscovery}
-        >
+      {/* Primary action: Start Discovery Run */}
+      {(launchState === "ready" || launchState === "failed") && (
+        <Button className="w-full gap-2" size="lg" onClick={launchDiscovery}>
           <Rocket className="h-4 w-4" />
-          Launch Discovery Pipeline
+          Start Discovery Run
         </Button>
       )}
 
