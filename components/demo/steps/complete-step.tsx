@@ -1,21 +1,20 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
   Copy,
   Database,
   Rocket,
-  ScanSearch,
   Loader2,
   ExternalLink,
   Layers,
   BarChart3,
   Clock,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { DemoSessionSummary } from "@/lib/demo/types";
 
@@ -31,7 +30,11 @@ interface CompleteStepProps {
 export function CompleteStep({ sessionId, catalog, schema, customerName, industryId, wizardStartTime }: CompleteStepProps) {
   const router = useRouter();
   const [session, setSession] = useState<DemoSessionSummary | null>(null);
-  const [launching, setLaunching] = useState<"discovery" | "scan" | null>(null);
+  const [launchState, setLaunchState] = useState<"pending" | "launching" | "launched" | "failed">("pending");
+  const [launchError, setLaunchError] = useState<string>("");
+  const launchedRef = useRef(false);
+
+  const fqn = `${catalog}.${schema}`;
 
   useEffect(() => {
     if (!sessionId) return;
@@ -41,15 +44,11 @@ export function CompleteStep({ sessionId, catalog, schema, customerName, industr
       .catch(() => {});
   }, [sessionId]);
 
-  const fqn = `${catalog}.${schema}`;
+  const launchDiscovery = useCallback(async () => {
+    if (launchedRef.current) return;
+    launchedRef.current = true;
+    setLaunchState("launching");
 
-  const handleCopyFqn = () => {
-    navigator.clipboard.writeText(fqn);
-    toast.success("Copied to clipboard");
-  };
-
-  const handleLaunchDiscovery = useCallback(async () => {
-    setLaunching("discovery");
     try {
       const createRes = await fetch("/api/runs", {
         method: "POST",
@@ -60,7 +59,7 @@ export function CompleteStep({ sessionId, catalog, schema, customerName, industr
           industry: industryId ?? "",
           businessPriorities: ["Increase Revenue"],
           discoveryDepth: "balanced",
-          estateScanEnabled: false,
+          estateScanEnabled: true,
         }),
       });
       if (!createRes.ok) throw new Error("Failed to create pipeline run");
@@ -69,48 +68,70 @@ export function CompleteStep({ sessionId, catalog, schema, customerName, industr
       const execRes = await fetch(`/api/runs/${runId}/execute`, { method: "POST" });
       if (!execRes.ok) throw new Error("Failed to start pipeline");
 
-      toast.success("Discovery pipeline started");
+      setLaunchState("launched");
+      toast.success("Discovery pipeline with estate scan started");
       router.push(`/runs/${runId}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to launch discovery");
-      setLaunching(null);
+      const msg = err instanceof Error ? err.message : "Failed to launch discovery";
+      setLaunchState("failed");
+      setLaunchError(msg);
+      launchedRef.current = false;
+      toast.error(msg);
     }
   }, [fqn, customerName, industryId, catalog, router]);
 
-  const handleLaunchEstateScan = useCallback(async () => {
-    setLaunching("scan");
-    try {
-      const res = await fetch("/api/environment-scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ucMetadata: fqn }),
-      });
-      if (!res.ok) throw new Error("Failed to start estate scan");
-
-      toast.success("Estate scan started");
-      router.push("/environment");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to launch estate scan");
-      setLaunching(null);
+  // Auto-launch as soon as session data loads
+  useEffect(() => {
+    if (session && launchState === "pending") {
+      launchDiscovery();
     }
-  }, [fqn, router]);
+  }, [session, launchState, launchDiscovery]);
+
+  const handleCopyFqn = () => {
+    navigator.clipboard.writeText(fqn);
+    toast.success("Copied to clipboard");
+  };
 
   return (
     <div className="space-y-6 px-1">
-      {/* Success header */}
+      {/* Header */}
       <div className="flex flex-col items-center gap-3 py-6">
-        <div className="relative">
-          <CheckCircle2 className="h-14 w-14 text-emerald-500" />
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
-            <span className="relative inline-flex h-4 w-4 rounded-full bg-emerald-500" />
-          </span>
-        </div>
-        <h3 className="text-xl font-semibold tracking-tight">Demo Data Ready</h3>
-        <p className="text-sm text-muted-foreground text-center max-w-md">
-          Synthetic demo data has been generated and is ready for analysis.
-          Launch a discovery pipeline or estate scan to see Forge in action.
-        </p>
+        {launchState === "launching" || launchState === "pending" ? (
+          <>
+            <div className="relative">
+              <div className="h-14 w-14 animate-spin rounded-full border-[3px] border-primary/20 border-t-primary" />
+            </div>
+            <h3 className="text-xl font-semibold tracking-tight">Launching Discovery</h3>
+            <p className="text-sm text-muted-foreground text-center max-w-md">
+              Demo data generated successfully. Starting discovery pipeline with environment scan...
+            </p>
+          </>
+        ) : launchState === "launched" ? (
+          <>
+            <div className="relative">
+              <CheckCircle2 className="h-14 w-14 text-emerald-500" />
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
+                <span className="relative inline-flex h-4 w-4 rounded-full bg-emerald-500" />
+              </span>
+            </div>
+            <h3 className="text-xl font-semibold tracking-tight">Pipeline Started</h3>
+            <p className="text-sm text-muted-foreground text-center max-w-md">
+              Redirecting to the discovery pipeline...
+            </p>
+          </>
+        ) : (
+          <>
+            <AlertCircle className="h-14 w-14 text-destructive/60" />
+            <h3 className="text-xl font-semibold tracking-tight">Demo Data Ready</h3>
+            <p className="text-sm text-muted-foreground text-center max-w-md">
+              Data generated but auto-launch failed. You can launch manually below.
+            </p>
+            {launchError && (
+              <p className="text-xs text-destructive">{launchError}</p>
+            )}
+          </>
+        )}
       </div>
 
       {/* Schema card */}
@@ -155,36 +176,25 @@ export function CompleteStep({ sessionId, catalog, schema, customerName, industr
         )}
       </div>
 
-      {/* Action buttons */}
-      <div className="space-y-2.5">
+      {/* Fallback manual launch -- only shown on failure */}
+      {launchState === "failed" && (
         <Button
           className="w-full gap-2"
           size="lg"
-          onClick={handleLaunchDiscovery}
-          disabled={launching !== null}
+          onClick={launchDiscovery}
         >
-          {launching === "discovery" ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Rocket className="h-4 w-4" />
-          )}
+          <Rocket className="h-4 w-4" />
           Launch Discovery Pipeline
         </Button>
-        <Button
-          variant="outline"
-          className="w-full gap-2"
-          size="lg"
-          onClick={handleLaunchEstateScan}
-          disabled={launching !== null}
-        >
-          {launching === "scan" ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <ScanSearch className="h-4 w-4" />
-          )}
-          Run Estate Scan
-        </Button>
-      </div>
+      )}
+
+      {/* Launching indicator */}
+      {launchState === "launching" && (
+        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Creating pipeline run with environment scan...
+        </div>
+      )}
 
       {/* Session link */}
       <div className="flex justify-center">

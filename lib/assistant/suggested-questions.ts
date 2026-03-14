@@ -16,10 +16,11 @@ import {
   FALLBACK_QUESTIONS,
   FALLBACK_QUESTIONS_ANALYST,
   FALLBACK_QUESTIONS_TECH,
+  FALLBACK_QUESTIONS_STRATEGIC,
 } from "./suggested-question-defaults";
 
 // Re-export client-safe constants so existing server-side imports still work.
-export { FALLBACK_QUESTIONS, FALLBACK_QUESTIONS_ANALYST, FALLBACK_QUESTIONS_TECH };
+export { FALLBACK_QUESTIONS, FALLBACK_QUESTIONS_ANALYST, FALLBACK_QUESTIONS_TECH, FALLBACK_QUESTIONS_STRATEGIC };
 
 const TARGET_COUNT = 6;
 
@@ -162,6 +163,48 @@ export async function buildSuggestedQuestions(
       if (scan) {
         candidates.push(`Show me the top opportunities in our data estate`);
       }
+    } else if (persona === "strategic") {
+      // --- C-level / board-level strategic questions ---
+      candidates.push(`What is the total estimated business value across all discovered use cases?`);
+      candidates.push(`Which strategic investments should we prioritise and why?`);
+
+      if (run?.industry) {
+        const outcome = await getIndustryOutcomeAsync(run.industry);
+        if (outcome) {
+          const kpis = collectKpis(outcome, 2);
+          for (const kpi of kpis) {
+            candidates.push(`What is the ROI potential of improving ${kpi.toLowerCase()}?`);
+          }
+          const ucNames = collectUseCaseNames(outcome, 2);
+          for (const name of ucNames) {
+            candidates.push(`Draft an executive brief on the business case for ${name}`);
+          }
+        }
+      }
+
+      if (useCases.length > 0) {
+        const topUc = pickRandom(useCases, 1);
+        for (const uc of topUc) {
+          candidates.push(`What should I present to the board about ${uc.name}?`);
+        }
+      }
+
+      if (run?.goals) {
+        candidates.push(`How well does our data portfolio align with our strategic goals?`);
+        candidates.push(`What gaps exist between our data capabilities and our business strategy?`);
+      }
+
+      if (run?.businessName) {
+        candidates.push(`Summarise the data-driven transformation roadmap for ${run.businessName}`);
+      }
+
+      if (scan) {
+        candidates.push(`Give me a board-ready overview of our data estate maturity`);
+        if (scan.avgGovernanceScore > 0) {
+          const score = Math.round(scan.avgGovernanceScore);
+          candidates.push(`Our governance score is ${score}/100 — what executive actions are needed?`);
+        }
+      }
     } else {
       // --- Analyst persona questions ---
       if (run?.industry) {
@@ -224,6 +267,7 @@ export async function buildSuggestedQuestions(
     if (candidates.length === 0) {
       if (persona === "tech") return FALLBACK_QUESTIONS_TECH;
       if (persona === "analyst") return FALLBACK_QUESTIONS_ANALYST;
+      if (persona === "strategic") return FALLBACK_QUESTIONS_STRATEGIC;
       return FALLBACK_QUESTIONS;
     }
 

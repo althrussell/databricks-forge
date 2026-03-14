@@ -35,7 +35,7 @@ const STEPS: { key: WizardStep; label: string }[] = [
   { key: "catalog", label: "Catalog" },
   { key: "schema-review", label: "Review" },
   { key: "progress", label: "Generate" },
-  { key: "complete", label: "Done" },
+  { key: "complete", label: "Launch" },
 ];
 
 interface DemoWizardProps {
@@ -158,7 +158,7 @@ export function DemoWizard({ open, onOpenChange }: DemoWizardProps) {
     catalog: "Choose where to create the demo data.",
     "schema-review": "Review the proposed table schema.",
     progress: "Generating demo data...",
-    complete: "Demo data is ready!",
+    complete: "Launching discovery pipeline...",
   };
 
   return (

@@ -25,3 +25,10 @@ export const FALLBACK_QUESTIONS_TECH = [
   "What schema drift or governance gaps exist?",
   "Which tables have the most downstream dependencies?",
 ];
+
+export const FALLBACK_QUESTIONS_STRATEGIC = [
+  "What is the total estimated business value of our discovered use cases?",
+  "Which domains have the highest ROI potential and what should we prioritise?",
+  "Draft a board-level summary of our data estate readiness and recommended investments",
+  "What are the key risks to our data strategy and how should we mitigate them?",
+];

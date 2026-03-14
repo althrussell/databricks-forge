@@ -15,6 +15,7 @@ import {
   FALLBACK_QUESTIONS,
   FALLBACK_QUESTIONS_ANALYST,
   FALLBACK_QUESTIONS_TECH,
+  FALLBACK_QUESTIONS_STRATEGIC,
 } from "@/lib/assistant/suggested-question-defaults";
 import {
   BrainCircuit,
@@ -132,13 +133,6 @@ const FALLBACK_QUESTIONS_GENIE_BUILDER: string[] = [
   "I want a Genie Space for our sales pipeline data in main.sales",
   "Build a space for HR analytics covering headcount and attrition",
   "Create a space for our finance schema focused on revenue reporting",
-];
-
-const FALLBACK_QUESTIONS_STRATEGIC: string[] = [
-  "What is the total estimated business value of our discovered use cases?",
-  "Which domains have the highest ROI potential and what should we prioritise?",
-  "Draft a board-level summary of our data estate readiness and recommended investments",
-  "What are the key risks to our data strategy and how should we mitigate them?",
 ];
 
 function getFallbackQuestions(persona: AssistantPersona): string[] {
