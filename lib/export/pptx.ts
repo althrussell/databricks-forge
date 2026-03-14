@@ -767,17 +767,30 @@ export async function generatePptx(
         });
       }
 
+      let currentSlide = ucSlide;
+
       for (const field of fields) {
         if (!field.value) continue;
 
-        // Estimate height: ~100 chars per line at font 12
         const estLines = Math.ceil(field.value.length / 100);
         const fieldH = Math.max(0.3, estLines * lineH + 0.12);
 
-        // Don't overflow the slide
-        if (yPos + fieldH > 6.3) break;
+        if (yPos + fieldH > 6.3) {
+          addFooter(currentSlide);
+          currentSlide = pptx.addSlide();
+          addAccentBar(currentSlide, DB_RED, 0, 0.4, 0.1, 6.0);
+          currentSlide.addText(`${uc.id} (continued)`, {
+            x: CONTENT_MARGIN,
+            y: 0.25,
+            w: CONTENT_W,
+            fontSize: 16,
+            color: MID_GRAY,
+            fontFace: "Calibri",
+          });
+          yPos = 0.65;
+        }
 
-        ucSlide.addText(
+        currentSlide.addText(
           [
             {
               text: `${field.label}: `,
@@ -811,8 +824,7 @@ export async function generatePptx(
       // Score bar at bottom
       const scoreY = Math.max(yPos + 0.1, 6.0);
       if (scoreY < 6.8) {
-        // Background strip for scores
-        ucSlide.addShape("rect", {
+        currentSlide.addShape("rect", {
           x: CONTENT_MARGIN + 0.2,
           y: scoreY - 0.05,
           w: CONTENT_W - 0.4,
@@ -875,14 +887,13 @@ export async function generatePptx(
           }
         });
 
-        ucSlide.addText(scoreSegments, {
+        currentSlide.addText(scoreSegments, {
           x: CONTENT_MARGIN + 0.3,
           y: scoreY,
           w: CONTENT_W - 0.6,
           fontFace: "Calibri",
         });
 
-        // Score rationale (if available)
         if (uc.scoreRationale) {
           const rationales = [
             uc.scoreRationale.priority.rationale,
@@ -890,7 +901,7 @@ export async function generatePptx(
             uc.scoreRationale.impact.rationale,
           ].filter(Boolean);
           if (rationales.length > 0 && scoreY + 0.35 < 7.0) {
-            ucSlide.addText(rationales.join("  |  "), {
+            currentSlide.addText(rationales.join("  |  "), {
               x: CONTENT_MARGIN + 0.3,
               y: scoreY + 0.3,
               w: CONTENT_W - 0.6,
@@ -903,7 +914,7 @@ export async function generatePptx(
         }
       }
 
-      addFooter(ucSlide);
+      addFooter(currentSlide);
     }
   }
 

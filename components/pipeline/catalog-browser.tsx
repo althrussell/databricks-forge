@@ -969,6 +969,19 @@ function CatalogRow({
             )}
           </>
         )}
+
+        {selectionMode === "schema" && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 gap-1 px-2 text-xs opacity-0 group-hover:opacity-100"
+            onClick={() => onAdd(catalog.name)}
+          >
+            <Plus className="h-3 w-3" />
+            Select
+          </Button>
+        )}
       </div>
 
       {showExpanded && (

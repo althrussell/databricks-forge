@@ -168,7 +168,7 @@ function buildDomainSummary(domain: string, cases: UseCase[]): string[] {
   return bullets;
 }
 
-/** Draw a simple table with header row */
+/** Draw a simple table with header row. Paginates across pages when rows overflow. */
 function drawTable(
   doc: PDFKit.PDFDocument,
   headers: string[],
@@ -185,32 +185,37 @@ function drawTable(
   const cellPadding = 8;
   const maxRows = options?.maxRows ?? rows.length;
   const tableW = colWidths.reduce((a, b) => a + b, 0);
-
-  // Header
-  doc.save().rect(x, y, tableW, headerH).fill(DB_DARK).restore();
-
-  let cx = x;
-  for (let i = 0; i < headers.length; i++) {
-    doc
-      .fontSize(headerFontSize)
-      .fillColor(WHITE)
-      .font("Helvetica-Bold")
-      .text(headers[i], cx + cellPadding, y + 9, {
-        width: colWidths[i] - cellPadding * 2,
-        align: i === 0 ? "left" : "center",
-      });
-    cx += colWidths[i];
-  }
-
-  let ry = y + headerH;
   const displayRows = rows.slice(0, maxRows);
 
+  const drawHeader = (startY: number) => {
+    doc.save().rect(x, startY, tableW, headerH).fill(DB_DARK).restore();
+    let cx = x;
+    for (let i = 0; i < headers.length; i++) {
+      doc
+        .fontSize(headerFontSize)
+        .fillColor(WHITE)
+        .font("Helvetica-Bold")
+        .text(headers[i], cx + cellPadding, startY + 9, {
+          width: colWidths[i] - cellPadding * 2,
+          align: i === 0 ? "left" : "center",
+        });
+      cx += colWidths[i];
+    }
+    return startY + headerH;
+  };
+
+  let ry = drawHeader(y);
+
   for (let r = 0; r < displayRows.length; r++) {
-    // Alternating row background
+    if (ry + rowH > PAGE_H - MARGIN - 30) {
+      addFooter(doc);
+      doc.addPage();
+      ry = drawHeader(MARGIN);
+    }
+
     if (r % 2 === 1) {
       doc.save().rect(x, ry, tableW, rowH).fill(WARM_WHITE).restore();
     }
-    // Bottom border
     doc
       .save()
       .moveTo(x, ry + rowH)
@@ -220,7 +225,7 @@ function drawTable(
       .stroke()
       .restore();
 
-    cx = x;
+    let cx = x;
     for (let c = 0; c < displayRows[r].length; c++) {
       doc
         .fontSize(fontSize)
@@ -651,9 +656,19 @@ export async function generatePdf(
 
         for (const field of fields) {
           if (!field.value) continue;
-          if (yPos > PAGE_H - 100) break; // Don't overflow
 
-          // Label
+          if (yPos > PAGE_H - 100) {
+            addFooter(doc);
+            doc.addPage();
+            addAccentBar(doc, DB_RED, 0, 55, 6, 400);
+            doc
+              .fontSize(14)
+              .fillColor(MID_GRAY)
+              .font("Helvetica")
+              .text(`${uc.id} (continued)`, MARGIN, MARGIN, { width: CONTENT_W });
+            yPos = MARGIN + 25;
+          }
+
           doc
             .fontSize(11)
             .fillColor(DB_DARK)
@@ -663,7 +678,6 @@ export async function generatePdf(
               continued: false,
             });
 
-          // Value
           doc
             .fontSize(11)
             .fillColor(TEXT_COLOR)

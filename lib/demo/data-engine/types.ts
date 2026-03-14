@@ -95,4 +95,5 @@ export interface DataJobStatus {
   completedTables: number;
   tableStatuses: TableGenerationStatus[];
   error?: string;
+  startedAt: number;
 }

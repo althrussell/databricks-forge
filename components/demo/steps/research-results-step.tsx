@@ -200,68 +200,99 @@ function ResearchSummary({
   research: ResearchEngineResult;
   sessionId: string;
 }) {
+  const sourceCount = research.sources.filter((s) => s.status === "ready").length;
+  const assetCount = research.matchedDataAssetIds.length;
+  const narrativeCount = research.dataNarratives.length;
+  const priorities = research.companyProfile?.statedPriorities ?? [];
+  const nomenclature = research.nomenclature ?? {};
+  const nomenclatureEntries = Object.entries(nomenclature).slice(0, 10);
+
   return (
-    <div className="space-y-4 px-1">
+    <div className="space-y-5 px-1">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-          <CheckCircle2 className="h-5 w-5" />
-          <span className="font-medium">Research Complete</span>
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/10">
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold leading-none">Research Complete</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">{research.industryId}</p>
+          </div>
         </div>
         <Button
           variant="outline"
           size="sm"
+          className="h-7 gap-1.5 text-xs"
           onClick={() => window.open(`/demo/sessions/${sessionId}`, "_blank")}
         >
-          <ExternalLink className="mr-2 h-3.5 w-3.5" />
-          View Full Insights
+          <ExternalLink className="h-3 w-3" />
+          Full Report
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Stat label="Industry" value={research.industryId} />
-        <Stat label="Data Assets Matched" value={String(research.matchedDataAssetIds.length)} />
-        <Stat label="Sources Used" value={String(research.sources.filter((s) => s.status === "ready").length)} />
-        <Stat label="Data Narratives" value={String(research.dataNarratives.length)} />
+      {/* Stat ribbon */}
+      <div className="grid grid-cols-4 gap-2">
+        {[
+          { value: String(sourceCount), label: "Sources", icon: Globe },
+          { value: String(assetCount), label: "Assets", icon: Map },
+          { value: String(narrativeCount), label: "Narratives", icon: Sparkles },
+          { value: String(priorities.length), label: "Priorities", icon: BarChart3 },
+        ].map(({ value, label, icon: Icon }) => (
+          <div
+            key={label}
+            className="relative overflow-hidden rounded-lg border bg-card px-3 py-2.5 text-center"
+          >
+            <Icon className="mx-auto mb-1 h-3.5 w-3.5 text-muted-foreground/50" />
+            <p className="text-lg font-bold leading-none tracking-tight">{value}</p>
+            <p className="mt-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+          </div>
+        ))}
       </div>
 
-      {research.companyProfile?.statedPriorities && research.companyProfile.statedPriorities.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-sm font-medium">Key Priorities</p>
-          <div className="flex flex-wrap gap-2">
-            {research.companyProfile.statedPriorities.slice(0, 6).map((p, i) => (
-              <Badge key={i} variant="secondary">{p.priority}</Badge>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {research.nomenclature && Object.keys(research.nomenclature).length > 0 && (
-        <div className="space-y-2">
-          <p className="text-sm font-medium">Company Terminology</p>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(research.nomenclature).slice(0, 8).map(([k, v]) => (
-              <Badge key={k} variant="outline">{k}: {v}</Badge>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {research.generatedOutcomeMap && (
-        <div className="rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-3">
-          <p className="text-sm text-amber-800 dark:text-amber-200">
-            A new industry outcome map was generated for this customer&apos;s industry and saved for future use.
+      {/* Priorities */}
+      {priorities.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Strategic Priorities
           </p>
+          <ol className="space-y-1.5">
+            {priorities.slice(0, 5).map((p, i) => (
+              <li key={i} className="flex items-start gap-2.5 text-sm">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                  {i + 1}
+                </span>
+                <span className="leading-snug">{p.priority}</span>
+              </li>
+            ))}
+          </ol>
         </div>
       )}
-    </div>
-  );
-}
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-lg font-semibold">{value}</p>
+      {/* Nomenclature */}
+      {nomenclatureEntries.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Company Terminology
+          </p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+            {nomenclatureEntries.map(([key, val]) => (
+              <div key={key} className="flex items-baseline gap-1.5 text-sm">
+                <span className="shrink-0 font-medium text-foreground">{key}</span>
+                <span className="truncate text-muted-foreground">{val}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Generated outcome map banner */}
+      {research.generatedOutcomeMap && (
+        <div className="flex items-center gap-2 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+          <Sparkles className="h-3.5 w-3.5 shrink-0" />
+          New industry outcome map generated and saved for future use.
+        </div>
+      )}
     </div>
   );
 }

@@ -41,13 +41,13 @@ export async function runSchemaDesign(
     .replace("{min_rows}", String(targetRowCount.min))
     .replace("{max_rows}", String(targetRowCount.max));
 
-  const endpoint = resolveEndpoint("reasoning");
+  const endpoint = resolveEndpoint("generation");
 
   const response = await llm.chat({
     endpoint,
     messages: [{ role: "user", content: prompt }],
-    temperature: 0.3,
-    maxTokens: 32_000,
+    temperature: 0.2,
+    maxTokens: 16_000,
     responseFormat: "json_object",
     signal,
   });

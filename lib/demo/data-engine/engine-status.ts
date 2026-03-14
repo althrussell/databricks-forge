@@ -40,6 +40,7 @@ export function startDataJob(sessionId: string): AbortController {
     completedTables: 0,
     tableStatuses: [],
     error: undefined,
+    startedAt: Date.now(),
   });
 
   return controller;

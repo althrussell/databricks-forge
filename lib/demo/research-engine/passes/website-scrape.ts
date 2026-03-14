@@ -46,6 +46,7 @@ export async function runWebsiteScrape(
     const source: ResearchSource = {
       type: "website",
       title: url,
+      url,
       charCount: 0,
       status: "fetching",
     };

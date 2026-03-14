@@ -65,6 +65,9 @@ export function DemoWizard({ open, onOpenChange }: DemoWizardProps) {
   const [schema, setSchema] = useState("");
   const [catalogCreated, setCatalogCreated] = useState(false);
 
+  // Timing
+  const [wizardStartTime, setWizardStartTime] = useState<number>(0);
+
   const currentStepIndex = STEPS.findIndex((s) => s.key === step);
 
   const handleStartResearch = useCallback(async () => {
@@ -84,6 +87,7 @@ export function DemoWizard({ open, onOpenChange }: DemoWizardProps) {
       const data = await resp.json();
       if (data.sessionId) {
         setSessionId(data.sessionId);
+        setWizardStartTime(Date.now());
         setStep("research");
       }
     } catch {
@@ -143,6 +147,7 @@ export function DemoWizard({ open, onOpenChange }: DemoWizardProps) {
       setCatalog("");
       setSchema("");
       setCatalogCreated(false);
+      setWizardStartTime(0);
       setRetryCount(0);
     }, 300);
   };
@@ -240,6 +245,7 @@ export function DemoWizard({ open, onOpenChange }: DemoWizardProps) {
               schema={schema}
               customerName={customerName}
               industryId={industryId}
+              wizardStartTime={wizardStartTime}
             />
           )}
         </div>

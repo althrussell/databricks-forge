@@ -39,6 +39,7 @@ export function GenerationProgressStep({
   onRetryNeeded,
 }: GenerationProgressStepProps) {
   const [status, setStatus] = useState<DataJobStatus | null>(null);
+  const [elapsed, setElapsed] = useState(0);
   const completedRef = useRef(false);
 
   useEffect(() => {
@@ -68,6 +69,14 @@ export function GenerationProgressStep({
     return () => clearInterval(interval);
   }, [sessionId, onComplete]);
 
+  useEffect(() => {
+    if (!status?.startedAt || (status.status !== "generating")) return;
+    const tick = () => setElapsed(Math.floor((Date.now() - status.startedAt) / 1000));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [status?.startedAt, status?.status]);
+
   if (!status) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -92,9 +101,14 @@ export function GenerationProgressStep({
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">{status.message}</span>
-          <span className="text-xs text-muted-foreground">
-            {status.completedTables}/{status.totalTables} tables
-          </span>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span>
+              {elapsed >= 60 ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s` : `${elapsed}s`}
+            </span>
+            <span>
+              {status.completedTables}/{status.totalTables} tables
+            </span>
+          </div>
         </div>
         <Progress value={status.percent} />
       </div>
