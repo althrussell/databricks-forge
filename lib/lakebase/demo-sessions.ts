@@ -118,6 +118,8 @@ export async function updateDemoSessionStatus(
     dataModelJson?: string;
     tablesJson?: string;
     sourceDocsJson?: string;
+    catalogName?: string;
+    schemaName?: string;
     tablesCreated?: number;
     totalRows?: number;
     durationMs?: number;
@@ -131,6 +133,8 @@ export async function updateDemoSessionStatus(
     if (extra?.dataModelJson !== undefined) data.dataModelJson = extra.dataModelJson;
     if (extra?.tablesJson !== undefined) data.tablesJson = extra.tablesJson;
     if (extra?.sourceDocsJson !== undefined) data.sourceDocsJson = extra.sourceDocsJson;
+    if (extra?.catalogName !== undefined) data.catalogName = extra.catalogName;
+    if (extra?.schemaName !== undefined) data.schemaName = extra.schemaName;
     if (extra?.tablesCreated !== undefined) data.tablesCreated = extra.tablesCreated;
     if (extra?.totalRows !== undefined) data.totalRows = extra.totalRows;
     if (extra?.durationMs !== undefined) data.durationMs = extra.durationMs;
