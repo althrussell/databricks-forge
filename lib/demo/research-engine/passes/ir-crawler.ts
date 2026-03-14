@@ -224,22 +224,17 @@ async function trySecEdgar(
   const sources: ResearchSource[] = [];
 
   try {
-    // Extract company domain for search
     const domain = new URL(websiteUrl).hostname.replace(/^www\./, "");
+
+    // Skip SEC EDGAR for non-US domains (country-code TLDs)
+    if (isNonUsDomain(domain)) {
+      log.debug("Skipping SEC EDGAR for non-US domain", { domain });
+      return { text: "", sources };
+    }
+
     const companyName = domain.split(".")[0];
-
-    // Search EDGAR for the company
-    const searchUrl = `https://efts.sec.gov/LATEST/search-index?q=%22${encodeURIComponent(companyName)}%22&dateRange=custom&startdt=${getOneYearAgo()}&forms=10-K&hits.hits.total.value=1`;
-    const searchResp = await timedFetch(fetchFn, searchUrl, signal);
-    if (!searchResp?.ok) return { text: "", sources };
-
-    const searchText = await searchResp.text();
-
-    // Try the simpler EDGAR full-text search API
-    const ftSearchUrl = `https://efts.sec.gov/LATEST/search-index?q=%22${encodeURIComponent(companyName)}%22&forms=10-K`;
-    const ftResp = await timedFetch(fetchFn, ftSearchUrl, signal);
-    if (!ftResp?.ok) {
-      log.debug("SEC EDGAR search returned no results", { companyName });
+    if (companyName.length < 3) {
+      log.debug("Domain label too short for SEC EDGAR lookup", { companyName });
       return { text: "", sources };
     }
 
@@ -252,13 +247,8 @@ async function trySecEdgar(
       { cik_str: number; ticker: string; title: string }
     >;
 
-    // Find matching company by name
     const entries = Object.values(tickerData);
-    const match = entries.find(
-      (e) =>
-        e.title.toLowerCase().includes(companyName.toLowerCase()) ||
-        companyName.toLowerCase().includes(e.title.toLowerCase().split(" ")[0]),
-    );
+    const match = findBestEdgarMatch(companyName, entries);
 
     if (!match) {
       log.debug("No SEC EDGAR match found", { companyName });
@@ -328,10 +318,64 @@ async function trySecEdgar(
   }
 }
 
-function getOneYearAgo(): string {
-  const d = new Date();
-  d.setFullYear(d.getFullYear() - 1);
-  return d.toISOString().split("T")[0];
+// Country-code TLDs and compound ccTLDs (e.g. .co.uk, .com.au) indicate non-US companies.
+const NON_US_TLDS = new Set([
+  "au", "uk", "de", "fr", "jp", "cn", "in", "br", "ca", "nz", "za", "sg",
+  "hk", "kr", "tw", "it", "es", "nl", "se", "no", "dk", "fi", "ch", "at",
+  "be", "ie", "pt", "pl", "cz", "ru", "mx", "ar", "cl", "co", "pe", "il",
+  "ae", "sa", "th", "my", "ph", "id", "vn", "ng", "ke", "eg", "tr",
+]);
+
+function isNonUsDomain(domain: string): boolean {
+  const parts = domain.split(".");
+  if (parts.length < 2) return false;
+  const tld = parts[parts.length - 1].toLowerCase();
+  // Two-letter TLDs that aren't generic (exclude .io, .ai, .co used globally)
+  const genericTwoLetter = new Set(["io", "ai", "co", "me", "tv", "gg"]);
+  if (NON_US_TLDS.has(tld)) return true;
+  // Compound ccTLDs: .com.au, .co.uk, .co.nz, etc.
+  if (parts.length >= 3) {
+    const secondLevel = parts[parts.length - 2].toLowerCase();
+    if ((secondLevel === "com" || secondLevel === "co" || secondLevel === "org" || secondLevel === "net") &&
+        tld.length === 2 && !genericTwoLetter.has(tld)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function findBestEdgarMatch(
+  companyName: string,
+  entries: { cik_str: number; ticker: string; title: string }[],
+): { cik_str: number; ticker: string; title: string } | undefined {
+  const cn = companyName.toLowerCase();
+
+  // Exact ticker match (highest confidence)
+  const tickerMatch = entries.find((e) => e.ticker.toLowerCase() === cn);
+  if (tickerMatch) return tickerMatch;
+
+  // Normalize SEC title for comparison: "O REILLY" → "oreilly"
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const cnNorm = normalize(cn);
+
+  // Collect scored candidates instead of returning first hit
+  const candidates: { entry: typeof entries[0]; score: number }[] = [];
+
+  for (const e of entries) {
+    const titleNorm = normalize(e.title);
+    // SEC title (normalized) starts with the domain name, or vice versa
+    if (titleNorm.startsWith(cnNorm) || cnNorm.startsWith(titleNorm)) {
+      const overlap = Math.min(cnNorm.length, titleNorm.length);
+      const maxLen = Math.max(cnNorm.length, titleNorm.length);
+      candidates.push({ entry: e, score: overlap / maxLen });
+    }
+  }
+
+  if (candidates.length === 0) return undefined;
+
+  // Require at least 40% overlap to avoid spurious matches
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0].score >= 0.4 ? candidates[0].entry : undefined;
 }
 
 async function timedFetch(
