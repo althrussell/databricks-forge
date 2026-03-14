@@ -16,7 +16,6 @@ import {
   Loader2,
   Sparkles,
   Check,
-  Zap,
   Table2,
   MessageSquare,
   BookOpen,
@@ -24,6 +23,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { parseErrorResponse, safeJsonParse } from "@/lib/error-utils";
+import { BuildModeSelector, type BuildMode } from "@/components/genie/build-mode-selector";
 
 interface ExtractedRequirements {
   tables: string[];
@@ -116,7 +116,7 @@ export default function CreateFromRequirementsPage() {
     }
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (mode: BuildMode = "full") => {
     if (!parseResult) return;
 
     const allTables = [
@@ -145,7 +145,7 @@ export default function CreateFromRequirementsPage() {
             domain: parseResult.requirements.domainContext,
             conversationSummary: parseResult.requirements.domainContext,
             globalInstructions: parseResult.requirements.instructions.join("\n"),
-            mode: "full",
+            mode,
             generateBenchmarks: true,
           },
         }),
@@ -410,15 +410,10 @@ export default function CreateFromRequirementsPage() {
                   placeholder="e.g. main.sales.orders, main.sales.customers"
                 />
               </div>
-              <div className="flex gap-3">
-                <Button onClick={handleGenerate}>
-                  <Zap className="mr-2 size-4" />
-                  Generate Genie Space
-                </Button>
-                <Button variant="outline" onClick={() => setStep("upload")}>
-                  Back
-                </Button>
-              </div>
+              <BuildModeSelector onSelect={handleGenerate} />
+              <Button variant="outline" onClick={() => setStep("upload")}>
+                Back
+              </Button>
             </CardContent>
           </Card>
         </div>

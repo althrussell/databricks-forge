@@ -12,7 +12,11 @@ import { v4 as uuidv4 } from "uuid";
 import { getConfig } from "@/lib/dbx/client";
 import { createGenieSpace } from "@/lib/dbx/genie";
 import { listTrackedGenieSpaces, trackGenieSpaceCreated } from "@/lib/lakebase/genie-spaces";
-import { listCachedSpaces, getCacheSyncTimestamp } from "@/lib/lakebase/genie-space-cache";
+import {
+  listCachedSpaces,
+  getCacheSyncTimestamp,
+  upsertCachedSpaces,
+} from "@/lib/lakebase/genie-space-cache";
 import { logger } from "@/lib/logger";
 import { safeErrorMessage } from "@/lib/error-utils";
 import type { GenieAuthMode } from "@/lib/settings";
@@ -302,6 +306,15 @@ async function runDeploy(
     },
     params.authMode,
   );
+
+  // Step 5: Add to listing cache so the space appears immediately
+  await upsertCachedSpaces([
+    {
+      spaceId: result.space_id,
+      title: params.title,
+      description: params.description ?? null,
+    },
+  ]);
 
   logger.info("Genie space created successfully", {
     spaceId: result.space_id,

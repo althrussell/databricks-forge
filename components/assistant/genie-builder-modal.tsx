@@ -39,13 +39,14 @@ import type {
 } from "@/lib/genie/types";
 import { loadSettings } from "@/lib/settings";
 import { parseErrorResponse, safeJsonParse } from "@/lib/error-utils";
+import { BuildModeSelector, type BuildMode } from "@/components/genie/build-mode-selector";
 import type { TableEnrichmentData } from "./ask-forge-chat";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Phase = "generating" | "ready" | "deploying" | "deployed" | "error";
+type Phase = "choose" | "generating" | "ready" | "deploying" | "deployed" | "error";
 
 interface GenieBuilderModalProps {
   open: boolean;
@@ -85,10 +86,11 @@ export function GenieBuilderModal({
   domain,
   conversationSummary,
 }: GenieBuilderModalProps) {
-  const [phase, setPhase] = useState<Phase>("generating");
+  const [phase, setPhase] = useState<Phase>("choose");
   const [genMessage, setGenMessage] = useState("Building space from metadata...");
   const [genPercent, setGenPercent] = useState(0);
   const [genError, setGenError] = useState<string | null>(null);
+  const [generateJobId, setGenerateJobId] = useState<string | null>(null);
 
   const [recommendation, setRecommendation] = useState<GenieSpaceRecommendation | null>(null);
   const [parsedSpace, setParsedSpace] = useState<SerializedSpace | null>(null);
@@ -103,7 +105,6 @@ export function GenieBuilderModal({
   const [metricViewsServerEnabled, setMetricViewsServerEnabled] = useState(false);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const generationTriggered = useRef(false);
 
   const mvProposals = useMemo(
     () => (recommendation ? parseMetricViewProposals(recommendation) : []),
@@ -127,7 +128,7 @@ export function GenieBuilderModal({
   // Reset state when modal opens
   useEffect(() => {
     if (open) {
-      setPhase("generating");
+      setPhase("choose");
       setGenMessage("Building space from metadata...");
       setGenPercent(0);
       setGenError(null);
@@ -138,7 +139,7 @@ export function GenieBuilderModal({
       setShowDetails(false);
       setShowSchemaSelector(false);
       setDeployedSpaceId(null);
-      generationTriggered.current = false;
+      setGenerateJobId(null);
     } else {
       if (pollRef.current) {
         clearInterval(pollRef.current);
@@ -213,6 +214,7 @@ export function GenieBuilderModal({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data: any = await safeJsonParse(res);
       if (!data) throw new Error("Invalid response from server");
+      if (data.jobId) setGenerateJobId(data.jobId);
       if (data.status === "completed" && data.result) {
         handleGenerationResult(data.result.recommendation, "fast");
       } else {
@@ -244,6 +246,7 @@ export function GenieBuilderModal({
       const startData: any = await safeJsonParse(res);
       if (!startData) throw new Error("Invalid response from server");
       const { jobId } = startData;
+      if (jobId) setGenerateJobId(jobId);
 
       pollRef.current = setInterval(async () => {
         try {
@@ -273,13 +276,16 @@ export function GenieBuilderModal({
     }
   }, [tables, buildConfig, handleGenerationResult]);
 
-  // Auto-trigger fast generation on open
-  useEffect(() => {
-    if (open && !generationTriggered.current && tables.length > 0) {
-      generationTriggered.current = true;
-      runFastGeneration();
-    }
-  }, [open, tables, runFastGeneration]);
+  const handleModeSelect = useCallback(
+    (mode: BuildMode) => {
+      if (mode === "fast") {
+        runFastGeneration();
+      } else {
+        runFullGeneration();
+      }
+    },
+    [runFastGeneration, runFullGeneration],
+  );
 
   useEffect(() => {
     return () => {
@@ -366,6 +372,16 @@ export function GenieBuilderModal({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ scope: "genie" }),
               }).catch(() => {});
+              if (generateJobId) {
+                fetch("/api/genie-spaces/generate", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    jobId: generateJobId,
+                    deployedSpaceId: pollData.result.spaceId,
+                  }),
+                }).catch(() => {});
+              }
             } else if (pollData.status === "failed") {
               if (deployPollRef.current) clearInterval(deployPollRef.current);
               setGenError(pollData.error || "Deployment failed");
@@ -383,6 +399,13 @@ export function GenieBuilderModal({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ scope: "genie" }),
         }).catch(() => {});
+        if (generateJobId) {
+          fetch("/api/genie-spaces/generate", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jobId: generateJobId, deployedSpaceId: data.spaceId }),
+          }).catch(() => {});
+        }
       }
     } catch (err) {
       setGenError(err instanceof Error ? err.message : "Deployment failed");
@@ -403,19 +426,28 @@ export function GenieBuilderModal({
                 : "Create Genie Space"}
           </DialogTitle>
           <DialogDescription>
-            {phase === "generating"
-              ? `Building from ${tables.length} table${tables.length !== 1 ? "s" : ""}...`
-              : phase === "ready"
-                ? "Review your space and deploy to Databricks."
-                : phase === "deploying"
-                  ? "Creating your Genie Space in Databricks..."
-                  : phase === "deployed"
-                    ? "Your Genie Space is live and ready for queries."
-                    : "Something went wrong."}
+            {phase === "choose"
+              ? "Choose a build mode to generate your Genie Space."
+              : phase === "generating"
+                ? `Building from ${tables.length} table${tables.length !== 1 ? "s" : ""}...`
+                : phase === "ready"
+                  ? "Review your space and deploy to Databricks."
+                  : phase === "deploying"
+                    ? "Creating your Genie Space in Databricks..."
+                    : phase === "deployed"
+                      ? "Your Genie Space is live and ready for queries."
+                      : "Something went wrong."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 min-h-0 overflow-y-auto">
+          {/* Choose build mode */}
+          {phase === "choose" && (
+            <div className="py-4">
+              <BuildModeSelector onSelect={handleModeSelect} tableCount={tables.length} />
+            </div>
+          )}
+
           {/* Generating phase */}
           {phase === "generating" && (
             <div className="space-y-4 py-4">

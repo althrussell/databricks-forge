@@ -9,10 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { ArrowLeft, Database, Loader2, Sparkles, Check, Search, Zap, Table2 } from "lucide-react";
+import { ArrowLeft, Database, Loader2, Sparkles, Check, Search, Table2 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import { parseErrorResponse, safeJsonParse } from "@/lib/error-utils";
+import { BuildModeSelector, type BuildMode } from "@/components/genie/build-mode-selector";
 
 interface ScannedTable {
   fqn: string;
@@ -50,7 +51,7 @@ export default function CreateFromSchemaPage() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [selectedTables, setSelectedTables] = useState<Set<string>>(new Set());
   const [title, setTitle] = useState("");
-  const [_generating, setGenerating] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const handleSchemaSelection = useCallback((sources: string[]) => {
     if (sources.length > 0) {
@@ -101,7 +102,7 @@ export default function CreateFromSchemaPage() {
     }
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (mode: BuildMode = "full") => {
     if (selectedTables.size === 0) {
       toast.error("Select at least one table");
       return;
@@ -119,7 +120,7 @@ export default function CreateFromSchemaPage() {
           config: {
             title: title || scanResult?.selection.suggestedTitle,
             domain: scanResult?.selection.suggestedDomain,
-            mode: "full",
+            mode,
           },
         }),
       });
@@ -328,15 +329,14 @@ export default function CreateFromSchemaPage() {
                   {scanResult.selection.businessContext}
                 </div>
               )}
-              <div className="flex gap-3">
-                <Button onClick={handleGenerate} disabled={selectedTables.size === 0}>
-                  <Zap className="mr-2 size-4" />
-                  Generate Genie Space ({selectedTables.size} tables)
-                </Button>
-                <Button variant="outline" onClick={() => setStep("input")}>
-                  Back
-                </Button>
-              </div>
+              <BuildModeSelector
+                onSelect={handleGenerate}
+                disabled={selectedTables.size === 0 || generating}
+                tableCount={selectedTables.size}
+              />
+              <Button variant="outline" onClick={() => setStep("input")}>
+                Back
+              </Button>
             </CardContent>
           </Card>
         </>

@@ -182,6 +182,11 @@ export default function GenieBuildDetailPage({ params }: { params: Promise<{ job
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ scope: "genie" }),
               }).catch(() => {});
+              fetch("/api/genie-spaces/generate", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ jobId, deployedSpaceId: pollData.result.spaceId }),
+              }).catch(() => {});
             } else if (pollData.status === "failed") {
               if (deployPollRef.current) clearInterval(deployPollRef.current);
               setDeployError(pollData.error || "Deployment failed");
@@ -195,6 +200,11 @@ export default function GenieBuildDetailPage({ params }: { params: Promise<{ job
         setDeployedSpaceId(data.spaceId);
         setPhase("deployed");
         toast.success("Genie Space deployed successfully!");
+        fetch("/api/genie-spaces/generate", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobId, deployedSpaceId: data.spaceId }),
+        }).catch(() => {});
       }
     } catch (err) {
       setDeployError(err instanceof Error ? err.message : "Deployment failed");
