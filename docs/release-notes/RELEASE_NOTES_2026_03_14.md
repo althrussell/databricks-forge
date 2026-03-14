@@ -1,6 +1,6 @@
 # Release Notes -- 2026-03-14
 
-**Databricks Forge v0.32.0 → v0.36.3**
+**Databricks Forge v0.32.0 → v0.37.0**
 
 ---
 
@@ -353,6 +353,55 @@ suffix files.
   instead of navigating away from the wizard via `router.push`.
 - **mkdocs nav stale release note references** -- Removed deleted suffix release
   note files from `mkdocs.yml` navigation that were causing 404s on the docs site.
+
+---
+
+## v0.37.0 -- Sales Briefing Redesign
+
+### Improvements
+
+#### Demo Session Detail Page: Sales-First Briefing Experience
+
+Complete redesign of the `/demo/sessions/[sessionId]` page from a long research
+dump into an executive sales briefing optimised for 90-second scanability.
+
+**New information architecture:**
+- **Briefing header** with account thesis, best wedge, why-now signal, confidence
+  badge, and three-tier CTAs (Start Discovery / Open Talk Track / View Evidence)
+- **Meeting Summary Strip** -- 5 compact cards (Top Priority, Best Use Case,
+  Main Risk, Best Buyer, Proof Strength) for instant pre-meeting context
+- **Tab-based navigation** replacing vertical scroll: Summary, Opportunities,
+  Talk Track, Evidence, Sources
+- **Sticky sidebar rail** (desktop) with account thesis, top 3 opportunities,
+  quick actions, export, and confidence/source stats
+
+**Summary tab** includes Executive Brief card (who they are / what they care
+about / what is likely broken / best opening angle), "So what this means for us"
+callout, Priorities & Gaps, Compact SWOT (2x2 mini-grid, no pastel fills), and
+Industry Trends as chips with collapsible detail.
+
+**Opportunities tab** transforms Killer Moments into ranked opportunity cards
+with business pain, value hypothesis, discovery hook, linked data assets,
+confidence, urgency, ideal buyer, and "Use in Talk Track" CTA.
+
+**Talk Track tab** provides persona-based selling guidance (CEO, COO, CIO/CTO,
+Head of Digital, Risk/Compliance) with what they care about, what to say,
+expected objection, proof to use, and best next question.
+
+**Evidence tab** structures claims with confidence levels, evidence counts,
+freshness indicators, and supporting source snippets.
+
+**Data Readiness** redesign replaces cryptic asset IDs with relevance scores,
+criticality badges, quick-win flags, and linked use cases.
+
+**Component architecture** -- 11 new modular components:
+`ResearchHeader`, `MeetingSummaryStrip`, `ExecutiveBriefCard`, `CompactSwot`,
+`SummaryTab`, `OpportunitiesTab` / `OpportunityCard`, `PersonaTalkTrack`,
+`EvidenceList`, `SourceList`, `DataReadinessList`, `StickyBriefRail`.
+
+Page reduced from 850 lines in a single file to 210 lines orchestrating
+focused components. Desktop layout uses max-w-[1440px] with main content +
+288px sticky right rail; mobile stacks cleanly with preserved tabs.
 
 ---
 
