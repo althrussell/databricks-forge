@@ -8,7 +8,6 @@ export const ENERGY_UTILITIES: IndustryOutcome = {
     "Renewables (Solar, Wind, Hydro)",
     "Electric Utilities",
     "Gas & Water Utilities",
-    "Mining",
     "Energy Trading",
   ],
   suggestedDomains: [
