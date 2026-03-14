@@ -111,13 +111,45 @@ export async function POST(request: NextRequest) {
     const mode = config?.mode ?? "fast";
 
     // -----------------------------------------------------------------------
-    // Fast mode (synchronous) -- only when async flag is NOT set
+    // Fast mode (synchronous) -- only when async flag is NOT set.
+    // We still create an in-memory job so Genie Studio can show a tile
+    // with progress while the synchronous call blocks.
     // -----------------------------------------------------------------------
     if (mode === "fast" && !asyncMode) {
+      evictStale();
+      const jobId = uuidv4();
+      jobs.set(jobId, {
+        jobId,
+        status: "generating",
+        currentStep: null,
+        message: "Quick build in progress...",
+        percent: 50,
+        startedAt: Date.now(),
+        completedAt: null,
+        error: null,
+        result: null,
+        title: config?.title ?? undefined,
+        domain: config?.domain ?? undefined,
+        tableCount: tables.length,
+        source: source ?? undefined,
+        conversationSummary: config?.conversationSummary ?? undefined,
+      });
       try {
         const result = await runFastGenieEngine({ tables, config });
         const quality = result.recommendation.quality;
+        const job = jobs.get(jobId);
+        if (job) {
+          job.status = "completed";
+          job.percent = 100;
+          job.completedAt = Date.now();
+          job.message = "Generation complete";
+          job.result = { recommendation: result.recommendation, mode: "fast" };
+          if (!job.title && result.recommendation.title) job.title = result.recommendation.title;
+          if (!job.domain && result.recommendation.domain)
+            job.domain = result.recommendation.domain;
+        }
         return NextResponse.json({
+          jobId,
           status: "completed",
           mode: "fast",
           quality,
@@ -127,6 +159,13 @@ export async function POST(request: NextRequest) {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.error("Fast Genie generation failed", { error: msg });
+        const job = jobs.get(jobId);
+        if (job) {
+          job.status = "failed";
+          job.message = "Generation failed";
+          job.error = msg;
+          job.completedAt = Date.now();
+        }
         return NextResponse.json({ error: msg }, { status: 500 });
       }
     }
@@ -189,6 +228,9 @@ export async function POST(request: NextRequest) {
           job.currentStep = null;
           job.completedAt = Date.now();
           job.result = { recommendation: result.recommendation, mode: effectiveMode };
+          if (!job.title && result.recommendation.title) job.title = result.recommendation.title;
+          if (!job.domain && result.recommendation.domain)
+            job.domain = result.recommendation.domain;
         }
       })
       .catch((err) => {
