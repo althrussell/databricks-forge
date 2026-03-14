@@ -36,6 +36,7 @@ export const EMBEDDING_KINDS = [
   "roadmap_phase",
   "stakeholder_profile",
   "executive_synthesis",
+  "company_research",
 ] as const;
 
 export type EmbeddingKind = (typeof EMBEDDING_KINDS)[number];
@@ -58,6 +59,7 @@ export const SEARCH_SCOPES: Record<string, readonly EmbeddingKind[]> = {
   fabric: ["fabric_dataset", "fabric_measure", "fabric_report", "fabric_artifact"],
   skills: ["skill_chunk", "industry_kpi", "industry_benchmark", "industry_data_asset"],
   strategy: ["value_estimate", "roadmap_phase", "stakeholder_profile", "executive_synthesis"],
+  "company-research": ["company_research"],
   all: EMBEDDING_KINDS,
 };
 

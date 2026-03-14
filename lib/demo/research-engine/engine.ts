@@ -24,8 +24,9 @@ import type {
 } from "./types";
 import type { ResearchSource, DataNarrative } from "../types";
 
-import { runWebsiteScrape } from "./passes/website-scrape";
+import { runWebsiteScrape, runDeepWebsiteScrape } from "./passes/website-scrape";
 import { runIRDiscovery } from "./passes/ir-crawler";
+import { embedResearchSources } from "./passes/research-embedder";
 import { runDocParsing } from "./passes/doc-parser";
 import { runIndustryClassification } from "./passes/industry-classification";
 import { runOutcomeMapGeneration, runEnrichmentOnlyGeneration } from "./passes/outcome-map-generation";
@@ -130,10 +131,18 @@ export async function runResearchEngine(
   let t0 = Date.now();
 
   const sourceTasks: Array<Promise<{ text: string; sources: ResearchSource[] }>> = [];
-  if (budget.sources.includes("website")) {
+  if (budget.sources.includes("strategic-crawl")) {
+    progress("source-collection", 5, "Deep scanning website (sitemap + strategic pages)...");
+    sourceTasks.push(runDeepWebsiteScrape(input.websiteUrl, input.scope, {
+      ...sourceOpts,
+      llm,
+      onProgress: (detail) => progress("source-collection", 8, detail),
+    }));
+  } else if (budget.sources.includes("website")) {
     sourceTasks.push(runWebsiteScrape(input.websiteUrl, input.scope, sourceOpts));
   }
-  if (budget.sources.includes("ir-discovery")) {
+  if (budget.sources.includes("ir-discovery") || budget.sources.includes("sec-edgar")) {
+    progress("source-collection", 9, "Scanning investor relations + filings...");
     sourceTasks.push(runIRDiscovery(input.websiteUrl, input.scope, sourceOpts));
   }
 
@@ -145,8 +154,9 @@ export async function runResearchEngine(
   }
 
   // User docs (only in full mode, synchronous since already parsed)
+  let docResult: { text: string; sources: ResearchSource[] } | null = null;
   if (budget.sources.includes("user-docs")) {
-    const docResult = runDocParsing(input.uploadedDocuments, input.pastedContext, {
+    docResult = runDocParsing(input.uploadedDocuments, input.pastedContext, {
       logger: log,
       onSourceReady: sourceOpts.onSourceReady,
     });
@@ -159,6 +169,47 @@ export async function runResearchEngine(
 
   checkCancelled(signal);
   progress("source-collection", 15, `${allSources.filter((s) => s.status === "ready").length} sources gathered`);
+
+  // =======================================================================
+  // Phase 0.5: Embed research sources for Ask Forge RAG
+  // =======================================================================
+  if (allSources.some((s) => s.status === "ready")) {
+    const tEmbed = Date.now();
+    progress("embedding", 12, `Embedding ${allSources.filter((s) => s.status === "ready").length} sources for Ask Forge...`);
+
+    const embedSources: Array<{ type: string; title: string; text: string }> = [];
+    for (const result of sourceResults) {
+      if (result.status === "fulfilled" && result.value.text) {
+        const firstSource = result.value.sources.find((s) => s.status === "ready");
+        embedSources.push({
+          type: firstSource?.type ?? "website",
+          title: firstSource?.title ?? "Source",
+          text: result.value.text,
+        });
+      }
+    }
+    if (docResult?.text) {
+      const firstDoc = docResult.sources.find((s) => s.status === "ready");
+      embedSources.push({
+        type: firstDoc?.type ?? "upload",
+        title: firstDoc?.title ?? "Uploaded documents",
+        text: docResult.text,
+      });
+    }
+
+    const embeddedCount = await embedResearchSources(
+      {
+        sessionId: input.sessionId ?? input.customerName,
+        customerName: input.customerName,
+        industryId: input.industryId ?? "",
+        sources: embedSources.filter((s) => s.text.length > 0),
+      },
+      log,
+    );
+
+    progress("embedding", 14, `Embedded ${embeddedCount} chunks for Ask Forge`);
+    passTimings["embedding"] = Date.now() - tEmbed;
+  }
 
   // =======================================================================
   // Phase 3.25: Industry Classification (if needed)

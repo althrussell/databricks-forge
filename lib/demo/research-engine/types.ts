@@ -22,6 +22,8 @@ import type {
 
 export interface ResearchEngineInput {
   customerName: string;
+  /** Optional -- used for embedding sourceId and cleanup. Falls back to customerName. */
+  sessionId?: string;
   /** Optional -- auto-detected from sources via Pass 3.25 if blank. */
   industryId?: string;
   preset?: ResearchPreset;
@@ -53,6 +55,7 @@ export type ResearchPhase =
   | "website-scrape"
   | "ir-discovery"
   | "doc-parsing"
+  | "embedding"
   | "industry-classification"
   | "outcome-map-generation"
   | "quick-synthesis"

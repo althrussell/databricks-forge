@@ -61,6 +61,7 @@ export async function POST(request: Request) {
 
         const result = await runResearchEngine({
           customerName,
+          sessionId,
           industryId,
           preset,
           websiteUrl,

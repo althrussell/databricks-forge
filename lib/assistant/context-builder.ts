@@ -76,6 +76,7 @@ const INTENT_SCOPES: Record<
       | "fabric"
       | "skills"
       | "strategy"
+      | "company-research"
       | undefined;
     topK: number;
     minScore: number;
@@ -89,6 +90,7 @@ const INTENT_SCOPES: Record<
     { scope: "estate", topK: 8, minScore: 0.35, useLatestScan: true },
     { scope: "benchmarks", topK: 6, minScore: 0.35 },
     { scope: "fabric", topK: 8, minScore: 0.35, useLatestFabricScan: true },
+    { scope: "company-research", topK: 6, minScore: 0.4 },
     { scope: "skills", topK: 4, minScore: 0.4 },
   ],
   technical: [
@@ -116,6 +118,7 @@ const INTENT_SCOPES: Record<
     { scope: "skills", topK: 4, minScore: 0.4 },
   ],
   strategic: [
+    { scope: "company-research", topK: 12, minScore: 0.35 },
     { scope: "usecases", topK: 15, minScore: 0.3, useLatestRun: true },
     { scope: "strategy", topK: 10, minScore: 0.3, useLatestRun: true },
     { scope: "estate", topK: 10, minScore: 0.3, useLatestScan: true },
@@ -144,6 +147,7 @@ interface RetrievalPlan {
     | "fabric"
     | "skills"
     | "strategy"
+    | "company-research"
     | undefined;
   topK: number;
   minScore: number;
