@@ -7,6 +7,7 @@
 
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { resolveResearchEndpoint } from "../resolve-endpoint";
+import type { TaskTier } from "@/lib/dbx/model-registry";
 import type { LLMClient } from "@/lib/ports/llm-client";
 import type { Logger } from "@/lib/ports/logger";
 import type { DemoScope } from "../../types";
@@ -28,9 +29,10 @@ export async function runDataStrategyMapping(
     logger: Logger;
     signal?: AbortSignal;
     maxTokens: number;
+    modelTier?: TaskTier;
   },
 ): Promise<DataStrategyMap> {
-  const { llm, logger: log, signal, maxTokens } = opts;
+  const { llm, logger: log, signal, maxTokens, modelTier } = opts;
 
   const division = scope?.division ?? "the company";
   const scopeContext = scope
@@ -45,7 +47,7 @@ export async function runDataStrategyMapping(
     .replace("{company_profile_json}", JSON.stringify(companyProfile).slice(0, 8_000))
     .replace("{data_assets_context}", dataAssetsContext.slice(0, 8_000));
 
-  const endpoint = resolveResearchEndpoint();
+  const endpoint = resolveResearchEndpoint(modelTier);
 
   const response = await llm.chat({
     endpoint,

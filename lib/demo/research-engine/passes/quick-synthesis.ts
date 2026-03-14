@@ -7,6 +7,7 @@
 
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { resolveResearchEndpoint } from "../resolve-endpoint";
+import type { TaskTier } from "@/lib/dbx/model-registry";
 import type { LLMClient } from "@/lib/ports/llm-client";
 import type { Logger } from "@/lib/ports/logger";
 import type { DemoScope, DataNarrative } from "../../types";
@@ -35,9 +36,10 @@ export async function runQuickSynthesis(
     llm: LLMClient;
     logger: Logger;
     signal?: AbortSignal;
+    modelTier?: TaskTier;
   },
 ): Promise<Partial<ResearchEngineResult>> {
-  const { llm, logger: log, signal } = opts;
+  const { llm, logger: log, signal, modelTier } = opts;
 
   const scopeContext = scope
     ? `Division: ${scope.division ?? "Full Enterprise"}\nFunctional Focus: ${scope.functionalFocus?.join(", ") ?? "All"}\nDepartments: ${scope.departments?.join(", ") ?? "All"}\nObjective: ${scope.demoObjective ?? "General demo"}`
@@ -50,7 +52,7 @@ export async function runQuickSynthesis(
     .replace("{website_text}", websiteText.slice(0, 6_000))
     .replace("{scope_context}", scopeContext);
 
-  const endpoint = resolveResearchEndpoint();
+  const endpoint = resolveResearchEndpoint(modelTier);
 
   const response = await llm.chat({
     endpoint,

@@ -7,6 +7,7 @@
 
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { resolveResearchEndpoint } from "../resolve-endpoint";
+import type { TaskTier } from "@/lib/dbx/model-registry";
 import type { LLMClient } from "@/lib/ports/llm-client";
 import type { Logger } from "@/lib/ports/logger";
 import type { DemoScope } from "../../types";
@@ -36,13 +37,14 @@ export async function runStrategyAndNarrative(
     logger: Logger;
     signal?: AbortSignal;
     maxTokens: number;
+    modelTier?: TaskTier;
   },
 ): Promise<{
   companyProfile: CompanyStrategicProfile;
   dataStrategy: DataStrategyMap;
   demoNarrative: DemoNarrativeDesign;
 }> {
-  const { llm, logger: log, signal, maxTokens } = opts;
+  const { llm, logger: log, signal, maxTokens, modelTier } = opts;
 
   const scopeContext = scope
     ? `Division: ${scope.division ?? "Full Enterprise"}\nFunctional Focus: ${scope.functionalFocus?.join(", ") ?? "All"}\nObjective: ${scope.demoObjective ?? "General demo"}`
@@ -56,7 +58,7 @@ export async function runStrategyAndNarrative(
     .replace("{data_assets_context}", dataAssetsContext.slice(0, 6_000))
     .replace("{source_text}", sourceText.slice(0, 10_000));
 
-  const endpoint = resolveResearchEndpoint();
+  const endpoint = resolveResearchEndpoint(modelTier);
 
   const response = await llm.chat({
     endpoint,
