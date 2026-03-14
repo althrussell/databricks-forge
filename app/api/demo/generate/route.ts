@@ -53,6 +53,8 @@ export async function POST(request: Request) {
     }
 
     await updateDemoSessionStatus(sessionId, "generating", {
+      catalogName: catalog,
+      schemaName: schema,
       tablesJson: JSON.stringify([]),
     });
 
@@ -87,6 +89,8 @@ export async function POST(request: Request) {
         await updateDemoSessionStatus(sessionId, "completed", {
           dataModelJson: JSON.stringify(result.designs),
           tablesJson: JSON.stringify(tableFqns),
+          catalogName: catalog,
+          schemaName: schema,
           tablesCreated: result.totalTables,
           totalRows: result.totalRows,
           durationMs: result.durationMs,

@@ -217,7 +217,7 @@ export function CompleteStep({
           variant="link"
           size="sm"
           className="gap-1.5 text-muted-foreground"
-          onClick={() => router.push(`/demo/sessions/${sessionId}`)}
+          onClick={() => window.open(`/demo/sessions/${sessionId}`, "_blank")}
         >
           View full research briefing
           <ExternalLink className="h-3 w-3" />
