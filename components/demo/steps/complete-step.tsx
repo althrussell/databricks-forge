@@ -25,9 +25,10 @@ interface CompleteStepProps {
   schema: string;
   customerName?: string;
   industryId?: string;
+  wizardStartTime?: number;
 }
 
-export function CompleteStep({ sessionId, catalog, schema, customerName, industryId }: CompleteStepProps) {
+export function CompleteStep({ sessionId, catalog, schema, customerName, industryId, wizardStartTime }: CompleteStepProps) {
   const router = useRouter();
   const [session, setSession] = useState<DemoSessionSummary | null>(null);
   const [launching, setLaunching] = useState<"discovery" | "scan" | null>(null);
@@ -125,7 +126,7 @@ export function CompleteStep({ sessionId, catalog, schema, customerName, industr
         </div>
 
         {session && (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-3">
             <div className="rounded-md bg-muted/50 p-2.5 text-center">
               <Layers className="mx-auto h-4 w-4 text-muted-foreground mb-1" />
               <p className="text-lg font-semibold">{session.tablesCreated}</p>
@@ -139,7 +140,16 @@ export function CompleteStep({ sessionId, catalog, schema, customerName, industr
             <div className="rounded-md bg-muted/50 p-2.5 text-center">
               <Clock className="mx-auto h-4 w-4 text-muted-foreground mb-1" />
               <p className="text-lg font-semibold">{Math.round(session.durationMs / 1000)}s</p>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Duration</p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Generation</p>
+            </div>
+            <div className="rounded-md bg-muted/50 p-2.5 text-center">
+              <Clock className="mx-auto h-4 w-4 text-muted-foreground mb-1" />
+              <p className="text-lg font-semibold">
+                {wizardStartTime
+                  ? `${Math.round((Date.now() - wizardStartTime) / 1000)}s`
+                  : `${Math.round(session.durationMs / 1000)}s`}
+              </p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total Time</p>
             </div>
           </div>
         )}

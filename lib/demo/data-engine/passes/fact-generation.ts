@@ -7,7 +7,7 @@
  */
 
 import { resolveEndpoint } from "@/lib/dbx/client";
-import { buildTableCommentDDL, buildBatchColumnCommentDDL } from "@/lib/ai/comment-applier";
+import { buildBatchColumnCommentDDL } from "@/lib/ai/comment-applier";
 import type { LLMClient } from "@/lib/ports/llm-client";
 import type { SqlExecutor } from "@/lib/ports/sql-executor";
 import type { Logger } from "@/lib/ports/logger";
@@ -142,14 +142,13 @@ export async function runFactGeneration(
     }
   }
 
-  // Apply table and column comments
-  await applyComments(table, catalog, schema, sql, log);
+  await applyColumnComments(table, catalog, schema, sql, log);
 
   onPhase?.("completed");
   return { rowCount: table.rowTarget };
 }
 
-async function applyComments(
+async function applyColumnComments(
   table: TableDesign,
   catalog: string,
   schema: string,
@@ -158,9 +157,6 @@ async function applyComments(
 ): Promise<void> {
   const fqn = `${catalog}.${schema}.${table.name}`;
   try {
-    if (table.description) {
-      await sql.execute(buildTableCommentDDL(fqn, table.description));
-    }
     const columnsWithComments = table.columns
       .filter((c) => c.description)
       .map((c) => ({ columnName: c.name, comment: c.description }));
@@ -168,7 +164,7 @@ async function applyComments(
       await sql.execute(buildBatchColumnCommentDDL(fqn, columnsWithComments));
     }
   } catch (err) {
-    log.warn("Failed to apply comments (non-fatal)", {
+    log.warn("Failed to apply column comments (non-fatal)", {
       table: table.name,
       error: err instanceof Error ? err.message : String(err),
     });

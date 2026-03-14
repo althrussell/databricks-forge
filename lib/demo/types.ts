@@ -99,6 +99,7 @@ export type ResearchSourceType = "website" | "investor-doc" | "sec-filing" | "up
 export interface ResearchSource {
   type: ResearchSourceType;
   title: string;
+  url?: string;
   charCount: number;
   status: "pending" | "fetching" | "ready" | "failed";
   error?: string;

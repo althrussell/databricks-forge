@@ -10,26 +10,67 @@ import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 /** SQL constraints for demo data generation to avoid Databricks rejection. */
 export const DEMO_DATA_SQL_CONSTRAINTS = `
 # CRITICAL DATABRICKS SQL CONSTRAINTS FOR DATA GENERATION
+
+## Random & Deterministic Values
 - NEVER pass a column or expression as a rand() seed: rand(col) is INVALID.
   Use rand() with NO arguments for random values.
-  For deterministic bucketing per row, use: hash(col_name) % N
+  For deterministic bucketing per row, use: abs(hash(col_name)) % N
+
+## Explode
 - NEVER nest explode() inside CAST or any expression.
   CORRECT:  SELECT explode(sequence(1, N)) AS seq_id
   WRONG:    SELECT CAST(explode(sequence(1, N)) AS BIGINT)
+
+## Intervals & Timestamps (CRITICAL -- most common error)
 - NEVER use INTERVAL with CAST or expressions.
   WRONG:    + INTERVAL CAST(expr AS INT) HOURS
   CORRECT:  + make_interval(0, 0, 0, 0, CAST(expr AS INT), 0, 0)
   CORRECT:  + (CAST(expr AS INT) * INTERVAL '1' HOUR)
-- For CTAS: use a SINGLE CREATE OR REPLACE TABLE ... AS SELECT statement.
+- NEVER add make_interval() or any time-component INTERVAL to a DATE value.
+  Databricks throws INVALID_INTERVAL_WITH_MICROSECONDS_ADDITION.
+  WRONG:    date_col + make_interval(0, 0, 0, 0, hours, mins, secs)
+  WRONG:    DATE '2024-01-01' + make_interval(0, 0, 0, 0, 8, 30, 0)
+  WRONG:    date_sub(current_date(), N) + make_interval(...)
+  CORRECT:  CAST(date_col AS TIMESTAMP) + make_interval(0, 0, 0, 0, hours, mins, secs)
+  CORRECT:  CAST(DATE '2024-01-01' AS TIMESTAMP) + make_interval(0, 0, 0, 0, 8, 30, 0)
+  Always CAST to TIMESTAMP before adding any interval with hour/minute/second components.
+  For created_at/updated_at columns, use this pattern:
+    CAST(CAST(some_date AS TIMESTAMP) + make_interval(0,0,0,0,h,m,s) AS TIMESTAMP)
+
+## Array Lookups (CRITICAL -- use get() not element_at())
+- NEVER use element_at() for FK dimension lookups -- it throws INVALID_ARRAY_INDEX on empty arrays.
+  WRONG:    element_at(arr, (abs(hash(col)) % size(arr)) + 1)
+  CORRECT:  get(arr, pmod(abs(hash(col)), GREATEST(size(arr), 1)))
+  get() returns NULL for out-of-bounds instead of throwing.
+
+## Division & Modulo Safety
+- NEVER use modulo (%) where divisor could be zero.
+  WRONG:    hash(col) % size(arr)
+  CORRECT:  pmod(abs(hash(col)), GREATEST(size(arr), 1))
+
+## Integer Overflow
+- When multiplying hash() values or large integers, CAST to BIGINT first.
+  WRONG:    hash(col1) * hash(col2)
+  CORRECT:  CAST(hash(col1) AS BIGINT) * CAST(hash(col2) AS BIGINT)
+  Also use abs() around hash() to avoid negative overflow: abs(hash(col))
+
+## Self-References
+- NEVER generate SQL that references its own output table in a CTE or subquery.
+  The table being created does NOT exist yet -- you cannot SELECT from it.
+
+## CTAS Format
+- Use a SINGLE CREATE OR REPLACE TABLE ... AS SELECT statement.
   NEVER follow with INSERT INTO -- all data must come from the SELECT.
 - Use fully qualified backtick-quoted names: \`catalog\`.\`schema\`.\`table\`
 - Fact tables MUST ONLY reference dimension tables, never other fact tables.
-- For date/calendar dimension tables: generate rows with DATE_ADD(DATE'2024-01-01', seq_id - 1).
+- Include COMMENT on the CREATE TABLE: CREATE OR REPLACE TABLE ... COMMENT 'description' AS SELECT ...
+
+## Date/Calendar Dimension Tables
+- Generate rows with DATE_ADD(DATE'2024-01-01', seq_id - 1).
   Derive date parts using built-in functions: YEAR(), MONTH(), DAY(), QUARTER(),
   DAYOFWEEK(), WEEKOFYEAR(), DAYOFYEAR(). Use DATE_FORMAT() ONLY with these safe
   patterns: 'yyyy', 'MM', 'dd', 'HH', 'mm', 'ss', 'E', 'EEEE', 'MMM', 'MMMM'.
-  NEVER use 'u', 'e', 'c', or 'L' in DATE_FORMAT -- Spark does NOT support them
-  and will throw DATETIME_PATTERN_RECOGNITION errors.
+  NEVER use 'u', 'e', 'c', or 'L' in DATE_FORMAT -- Spark does NOT support them.
 `;
 
 // ---------------------------------------------------------------------------
@@ -83,7 +124,7 @@ Return JSON:
 // Pass 1: Schema Design
 // ---------------------------------------------------------------------------
 
-export const SCHEMA_DESIGN_PROMPT = `You are a senior data architect designing a demo data model for {customer_name} in the {industry_name} industry.
+export const SCHEMA_DESIGN_PROMPT = `You are a senior data architect designing a LEAN demo data model for {customer_name} in the {industry_name} industry.
 
 # MATCHED DATA ASSETS
 {data_assets_context}
@@ -97,23 +138,30 @@ export const SCHEMA_DESIGN_PROMPT = `You are a senior data architect designing a
 # SCOPE
 Division: {division}
 Target Row Count: {min_rows} - {max_rows} per fact table
-Dimension tables: 50-200 rows each
+Dimension tables: 20-100 rows each
+
+# CRITICAL CONSTRAINTS
+- Design 8-12 tables TOTAL: 3-4 dimension tables + 5-8 fact tables.
+- This is a DEMO, not an enterprise data warehouse. Fewer tables with richer data beats many thin tables.
+- Consolidate related data assets into single tables where possible (a fact table can serve 2-3 assets).
+- Each table: 6-12 columns MAX. Focus on columns that enable the narrative patterns.
+- Keep shared dimensions small: site/location (5-10 rows), date (365 rows), category/type (10-25 rows).
+- Do NOT create equipment, shipment, or contract dimension tables unless they are critical to a narrative.
 
 # TASK
-Design a complete relational schema that:
-1. Maps each selected data asset to one or more tables
+Design a focused relational schema that:
+1. Maps selected data assets to tables (consolidate where possible)
 2. Uses {customer_name}'s terminology (from nomenclature)
 3. Supports the data narratives (tables must have columns that enable the patterns)
-4. Maintains referential integrity (FK relationships)
-5. Follows star schema conventions (dimension tables + fact tables)
-6. Orders tables for creation (dimensions first, then facts)
+4. Follows star schema conventions (dimension tables + fact tables)
+5. Orders tables for creation (dimensions first, then facts)
 
 # RULES
 - Table names: lowercase, underscored, descriptive
 - Column types: STRING, INT, BIGINT, DOUBLE, DECIMAL(18,2), DATE, TIMESTAMP, BOOLEAN
 - Every table needs a primary key column
 - FK columns must match the PK type of the referenced dimension
-- Include useful metadata columns: created_at TIMESTAMP, updated_at TIMESTAMP
+- Include created_at TIMESTAMP, updated_at TIMESTAMP on every table
 - Fact tables MUST NOT have FK references to other fact tables. Only reference dimension tables.
 
 # OUTPUT FORMAT
@@ -123,7 +171,7 @@ Return JSON:
     {
       "name": "table_name",
       "assetId": "A01",
-      "description": "string",
+      "description": "One-sentence table description for COMMENT clause",
       "tableType": "dimension|fact",
       "columns": [
         { "name": "col_name", "dataType": "STRING", "description": "string", "role": "pk|fk|measure|dimension|timestamp|flag", "fkTarget": "other_table.pk_col|null" }
@@ -157,8 +205,14 @@ ${DATABRICKS_SQL_RULES_COMPACT}
 ${DEMO_DATA_SQL_CONSTRAINTS}
 
 # TASK
-Generate a single CREATE OR REPLACE TABLE AS SELECT statement with {row_target} rows of realistic data.
-Use EXPLODE(SEQUENCE(1, {row_target})) to generate the row set, just like fact tables.
+Generate a single CREATE OR REPLACE TABLE ... COMMENT '{description}' AS SELECT statement with {row_target} rows.
+Use EXPLODE(SEQUENCE(1, {row_target})) to generate the row set.
+
+CRITICAL REMINDERS:
+- For TIMESTAMP columns (created_at, updated_at): ALWAYS CAST date to TIMESTAMP before adding intervals.
+  Pattern: CAST(CAST(date_val AS TIMESTAMP) + make_interval(0,0,0,0,h,m,s) AS TIMESTAMP)
+- Use abs(hash(col)) for deterministic bucketing, NEVER rand(col).
+- Use pmod(abs(hash(col)), GREATEST(N, 1)) for safe modulo.
 
 Requirements:
 - Values must be realistic for {customer_name}'s industry and division
@@ -183,7 +237,7 @@ Description: {description}
 Columns: {columns_json}
 Target Rows: {row_target}
 
-# RELATED DIMENSION TABLES
+# RELATED DIMENSION TABLES (only these exist -- do NOT reference any other tables)
 {dimension_tables_context}
 
 # DATA NARRATIVES TO EMBED
@@ -198,10 +252,12 @@ ${DATABRICKS_SQL_RULES_COMPACT}
 ${DEMO_DATA_SQL_CONSTRAINTS}
 
 # TASK
-Generate a single CREATE OR REPLACE TABLE AS SELECT statement. Use CTAS only -- NEVER CREATE TABLE + INSERT INTO.
+Generate a single CREATE OR REPLACE TABLE ... COMMENT '{description}' AS SELECT statement.
+Use CTAS only -- NEVER CREATE TABLE + INSERT INTO.
 
 1. Uses EXPLODE(SEQUENCE(1, {row_target})) to generate the row set (never nest explode in CAST)
-2. References dimension tables ONLY for FK values using element_at + COLLECT_LIST (never reference other fact tables)
+2. For FK lookups: use get() with COLLECT_LIST, NEVER element_at():
+   Pattern: get(dim_arr, pmod(abs(hash(seq_id, 'SALT')), GREATEST(size(dim_arr), 1)))
 3. Creates non-uniform distributions:
    - CASE WHEN RAND() < 0.3 THEN 'X' for weighted categories (RAND() with no seed)
    - RAND() * range + offset for numeric measures
@@ -210,5 +266,7 @@ Generate a single CREATE OR REPLACE TABLE AS SELECT statement. Use CTAS only -- 
    - Temporal spikes/dips using CASE WHEN date BETWEEN ... conditions
    - Correlated anomalies across related columns
    - Seasonal patterns using MONTH() or DAYOFWEEK()
+5. For TIMESTAMP columns: ALWAYS CAST date to TIMESTAMP before adding time intervals.
+6. NEVER reference the table being created -- it does not exist yet.
 
 Return ONLY the SQL statement. No markdown, no explanation.`;

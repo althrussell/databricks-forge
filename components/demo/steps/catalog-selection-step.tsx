@@ -56,6 +56,12 @@ export function CatalogSelectionStep({
           onCatalogCreatedChange(false);
           setValidation("valid");
           setValidationDetails({ catalogExists: true, schemaExists: true });
+        } else if (parts.length === 1 && parts[0]) {
+          onCatalogChange(parts[0]);
+          onSchemaChange(buildSchemaName(customerName, scope));
+          onCatalogCreatedChange(false);
+          setValidation("valid");
+          setValidationDetails({ catalogExists: true, schemaExists: false });
         }
       } else {
         onCatalogChange("");
@@ -63,7 +69,7 @@ export function CatalogSelectionStep({
         setValidation("idle");
       }
     },
-    [onCatalogChange, onSchemaChange, onCatalogCreatedChange],
+    [onCatalogChange, onSchemaChange, onCatalogCreatedChange, customerName, scope],
   );
 
   const handleValidateNew = useCallback(async () => {

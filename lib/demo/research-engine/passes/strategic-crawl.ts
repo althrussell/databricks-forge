@@ -126,6 +126,7 @@ export async function runStrategicCrawl(
     const source: ResearchSource = {
       type: "website",
       title: url,
+      url,
       charCount: 0,
       status: "fetching",
     };

@@ -141,6 +141,7 @@ export async function runIRDiscovery(
     const source: ResearchSource = {
       type: "investor-doc",
       title: link.title,
+      url: link.url,
       charCount: 0,
       status: "fetching",
     };
@@ -293,6 +294,7 @@ async function trySecEdgar(
     const source: ResearchSource = {
       type: "sec-filing",
       title: `10-K: ${match.title}`,
+      url: filingUrl,
       charCount: 0,
       status: "fetching",
     };

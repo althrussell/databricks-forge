@@ -218,33 +218,51 @@ export async function runDataEngine(
     const wavePercent = 50 + Math.round((waveIdx / factWaves.length) * 35);
     progress(`Generating fact tables (wave ${waveIdx + 1}/${factWaves.length})...`, wavePercent);
 
-    // Skip tables whose upstream dependencies failed
     const skippedInWave: TableResult[] = [];
     const executableInWave: TableDesign[] = [];
 
     for (const table of wave) {
-      const fkDeps = getFactDependencies(table, factTables);
-      const failedDep = fkDeps.find(
+      const fqn = `\`${input.catalog}\`.\`${input.schema}\`.\`${table.name}\``;
+
+      // Skip if an upstream fact dependency failed
+      const factDeps = getFactDependencies(table, factTables);
+      const failedFactDep = factDeps.find(
         (dep) => tableResults.some((r) => r.name === dep && r.status === "failed"),
       );
-      if (failedDep) {
-        const fqn = `\`${input.catalog}\`.\`${input.schema}\`.\`${table.name}\``;
-        log.warn("Skipping fact table -- upstream dependency failed", {
+      if (failedFactDep) {
+        log.warn("Skipping fact table -- upstream fact dependency failed", {
           table: table.name,
-          failedDependency: failedDep,
+          failedDependency: failedFactDep,
         });
         input.onTablePhase?.(table.name, "failed");
         skippedInWave.push({
-          name: table.name,
-          fqn,
-          rowCount: 0,
-          status: "failed",
-          error: `Skipped: dependency '${failedDep}' failed`,
+          name: table.name, fqn, rowCount: 0, status: "failed",
+          error: `Skipped: fact dependency '${failedFactDep}' failed`,
           retryCount: 0,
         });
-      } else {
-        executableInWave.push(table);
+        continue;
       }
+
+      // Skip if ALL referenced dimension tables failed (no FK data available)
+      const dimRefs = table.columns
+        .filter((c) => c.role === "fk" && c.fkTarget)
+        .map((c) => c.fkTarget!.split(".")[0])
+        .filter((ref) => dimensionTables.some((d) => d.name === ref));
+      if (dimRefs.length > 0 && dimRefs.every((ref) => !succeededDimNames.has(ref))) {
+        log.warn("Skipping fact table -- all referenced dimensions failed", {
+          table: table.name,
+          failedDims: dimRefs,
+        });
+        input.onTablePhase?.(table.name, "failed");
+        skippedInWave.push({
+          name: table.name, fqn, rowCount: 0, status: "failed",
+          error: `Skipped: all dimension dependencies failed (${dimRefs.join(", ")})`,
+          retryCount: 0,
+        });
+        continue;
+      }
+
+      executableInWave.push(table);
     }
 
     tableResults.push(...skippedInWave);

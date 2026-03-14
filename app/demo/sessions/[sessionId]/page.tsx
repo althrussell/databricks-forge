@@ -805,17 +805,33 @@ export default function DemoSessionPage() {
         {research?.sources?.length ? (
           <SectionCard title="Sources" icon={Globe} accentColor="border-l-gray-400" defaultOpen={false}>
             <div className="flex flex-wrap gap-2">
-              {research.sources.map((s, i) => (
-                <div
-                  key={i}
-                  className="inline-flex items-center gap-2 rounded-full border bg-muted/30 px-3 py-1.5 text-xs"
-                >
-                  <span className={`h-1.5 w-1.5 rounded-full ${s.status === "ready" ? "bg-emerald-500" : s.status === "failed" ? "bg-red-500" : "bg-amber-500"}`} />
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{s.type}</Badge>
-                  {s.title && <span className="max-w-[200px] truncate text-muted-foreground">{s.title}</span>}
-                  <span className="text-muted-foreground/60">{s.charCount.toLocaleString()}</span>
-                </div>
-              ))}
+              {research.sources.map((s, i) => {
+                const linkUrl = s.url ?? (s.title?.startsWith("http") ? s.title : undefined);
+                const label = s.url && s.title !== s.url ? s.title : (s.title ?? s.url);
+                return (
+                  <div
+                    key={i}
+                    className="inline-flex items-center gap-2 rounded-full border bg-muted/30 px-3 py-1.5 text-xs"
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${s.status === "ready" ? "bg-emerald-500" : s.status === "failed" ? "bg-red-500" : "bg-amber-500"}`} />
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{s.type}</Badge>
+                    {linkUrl ? (
+                      <a
+                        href={linkUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="max-w-[250px] truncate text-primary hover:underline"
+                        title={linkUrl}
+                      >
+                        {label}
+                      </a>
+                    ) : (
+                      label && <span className="max-w-[200px] truncate text-muted-foreground">{label}</span>
+                    )}
+                    <span className="text-muted-foreground/60">{s.charCount.toLocaleString()}</span>
+                  </div>
+                );
+              })}
             </div>
           </SectionCard>
         ) : null}
