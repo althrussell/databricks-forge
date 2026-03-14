@@ -27,6 +27,7 @@ import {
 } from "./digital-natives.enrichment";
 import { GAMES_USE_CASES, GAMES_DATA_ASSETS } from "./games.enrichment";
 import { SPORTS_BETTING_USE_CASES, SPORTS_BETTING_DATA_ASSETS } from "./sports-betting.enrichment";
+import { MINING_USE_CASES, MINING_DATA_ASSETS } from "./mining.enrichment";
 
 const REGISTRY = new Map<string, MasterRepoEnrichment>([
   ["banking", { useCases: BANKING_USE_CASES, dataAssets: BANKING_DATA_ASSETS }],
@@ -55,6 +56,7 @@ const REGISTRY = new Map<string, MasterRepoEnrichment>([
     "sports-betting",
     { useCases: SPORTS_BETTING_USE_CASES, dataAssets: SPORTS_BETTING_DATA_ASSETS },
   ],
+  ["mining", { useCases: MINING_USE_CASES, dataAssets: MINING_DATA_ASSETS }],
 ]);
 
 /** Get Master Repository enrichment data for an industry (built-in first, then custom). */
