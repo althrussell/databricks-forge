@@ -237,6 +237,10 @@ export default function DemoSessionPage() {
 
   const handleLaunchDiscovery = useCallback(async () => {
     if (!session) return;
+    if (!session.catalogName || !session.schemaName) {
+      toast.error("Session is missing catalog/schema. Re-run data generation first.");
+      return;
+    }
     setLaunching("discovery");
     try {
       const scope = `${session.catalogName}.${session.schemaName}`;
@@ -268,6 +272,10 @@ export default function DemoSessionPage() {
 
   const handleLaunchEstateScan = useCallback(async () => {
     if (!session) return;
+    if (!session.catalogName || !session.schemaName) {
+      toast.error("Session is missing catalog/schema. Re-run data generation first.");
+      return;
+    }
     setLaunching("scan");
     try {
       const scope = `${session.catalogName}.${session.schemaName}`;
