@@ -1,32 +1,44 @@
 /**
  * Research Engine endpoint resolution.
  *
- * The Research Engine is a premium feature -- all LLM calls default to
- * databricks-claude-opus-4-6 with databricks-gpt-5-4 as fallback. This
- * bypasses the queue-depth task router to ensure consistent quality.
+ * Supports tiered routing: "reasoning" (default) pins to Opus/GPT-5 for
+ * maximum quality; "generation" and "classification" delegate to the
+ * queue-depth-aware task router for faster turnaround.
  */
 
 import { getModelPool } from "@/lib/dbx/model-registry";
 import { resolveEndpoint } from "@/lib/dbx/client";
+import type { TaskTier } from "@/lib/dbx/model-registry";
 
 const PREFERRED = "databricks-claude-opus-4-6";
 const FALLBACK = "databricks-gpt-5-4";
 
-let _cached: string | null = null;
+let _reasoningCached: string | null = null;
 
-export function resolveResearchEndpoint(): string {
-  if (_cached) return _cached;
+/**
+ * Resolve an endpoint for research engine LLM calls.
+ *
+ * @param tier - When "reasoning" or omitted, uses the premium Opus/GPT-5
+ *   path (bypasses task router). For any other tier, delegates to the
+ *   queue-depth-aware task router for faster models.
+ */
+export function resolveResearchEndpoint(tier?: TaskTier): string {
+  if (tier && tier !== "reasoning") {
+    return resolveEndpoint(tier);
+  }
+
+  if (_reasoningCached) return _reasoningCached;
 
   const pool = getModelPool();
   const poolNames = new Set(pool.map((ep) => ep.name));
 
   if (poolNames.has(PREFERRED)) {
-    _cached = PREFERRED;
+    _reasoningCached = PREFERRED;
   } else if (poolNames.has(FALLBACK)) {
-    _cached = FALLBACK;
+    _reasoningCached = FALLBACK;
   } else {
-    _cached = resolveEndpoint("reasoning");
+    _reasoningCached = resolveEndpoint("reasoning");
   }
 
-  return _cached;
+  return _reasoningCached;
 }

@@ -7,6 +7,7 @@
 
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { resolveResearchEndpoint } from "../resolve-endpoint";
+import type { TaskTier } from "@/lib/dbx/model-registry";
 import type { LLMClient } from "@/lib/ports/llm-client";
 import type { Logger } from "@/lib/ports/logger";
 import type { IndustryLandscapeAnalysis } from "../types";
@@ -22,9 +23,10 @@ export async function runIndustryLandscape(
     logger: Logger;
     signal?: AbortSignal;
     maxTokens: number;
+    modelTier?: TaskTier;
   },
 ): Promise<IndustryLandscapeAnalysis> {
-  const { llm, logger: log, signal, maxTokens } = opts;
+  const { llm, logger: log, signal, maxTokens, modelTier } = opts;
 
   const prompt = INDUSTRY_LANDSCAPE_PROMPT
     .replace("{industry_name}", industryName)
@@ -32,7 +34,7 @@ export async function runIndustryLandscape(
     .replace("{benchmark_context}", benchmarkContext.slice(0, 4_000))
     .replace("{source_text}", sourceText.slice(0, 12_000));
 
-  const endpoint = resolveResearchEndpoint();
+  const endpoint = resolveResearchEndpoint(modelTier);
 
   const response = await llm.chat({
     endpoint,

@@ -7,6 +7,7 @@
 
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { resolveResearchEndpoint } from "../resolve-endpoint";
+import type { TaskTier } from "@/lib/dbx/model-registry";
 import type { LLMClient } from "@/lib/ports/llm-client";
 import type { Logger } from "@/lib/ports/logger";
 import type { IndustryClassification } from "../types";
@@ -19,9 +20,10 @@ export async function runIndustryClassification(
     llm: LLMClient;
     logger: Logger;
     signal?: AbortSignal;
+    modelTier?: TaskTier;
   },
 ): Promise<IndustryClassification> {
-  const { llm, logger: log, signal } = opts;
+  const { llm, logger: log, signal, modelTier } = opts;
 
   const industriesList = existingIndustries
     .map((i) => `- ${i.id}: ${i.name}`)
@@ -31,7 +33,8 @@ export async function runIndustryClassification(
     .replace("{existing_industries}", industriesList)
     .replace("{source_text}", sourceText.slice(0, 10_000));
 
-  const endpoint = resolveResearchEndpoint();
+  // Classification is a lightweight task; always prefer classification tier.
+  const endpoint = resolveResearchEndpoint(modelTier === "reasoning" ? "classification" : (modelTier ?? "classification"));
 
   const response = await llm.chat({
     endpoint,

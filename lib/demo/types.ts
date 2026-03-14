@@ -26,6 +26,8 @@ export interface ResearchBudget {
   )[];
   /** Max output tokens per analytical pass. */
   maxTokensPerPass: number;
+  /** LLM tier for analytical passes -- controls speed vs quality trade-off. */
+  modelTier: "reasoning" | "generation" | "classification";
   /** Estimated wall-clock seconds (min/max). */
   estimatedSeconds: { min: number; max: number };
 }
@@ -34,14 +36,16 @@ const QUICK_BUDGET: ResearchBudget = {
   sources: ["website"],
   analyticalPasses: ["quick-synthesis"],
   maxTokensPerPass: 8_192,
+  modelTier: "classification",
   estimatedSeconds: { min: 20, max: 45 },
 };
 
 const BALANCED_BUDGET: ResearchBudget = {
   sources: ["strategic-crawl", "ir-discovery"],
   analyticalPasses: ["industry-landscape", "strategy-and-narrative"],
-  maxTokensPerPass: 32_000,
-  estimatedSeconds: { min: 60, max: 90 },
+  maxTokensPerPass: 16_000,
+  modelTier: "generation",
+  estimatedSeconds: { min: 45, max: 120 },
 };
 
 const FULL_BUDGET: ResearchBudget = {
@@ -53,6 +57,7 @@ const FULL_BUDGET: ResearchBudget = {
     "demo-narrative",
   ],
   maxTokensPerPass: 32_000,
+  modelTier: "reasoning",
   estimatedSeconds: { min: 120, max: 180 },
 };
 

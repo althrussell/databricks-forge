@@ -101,10 +101,13 @@ export async function runResearchEngine(
     input.onProgress?.(phase, percent, detail);
   };
 
+  const modelTier = budget.modelTier;
+
   log.info("Starting research engine", {
     customer: input.customerName,
     industryId: input.industryId,
     preset,
+    modelTier,
     scope: input.scope,
   });
 
@@ -171,139 +174,148 @@ export async function runResearchEngine(
   progress("source-collection", 15, `${allSources.filter((s) => s.status === "ready").length} sources gathered`);
 
   // =======================================================================
-  // Phase 0.5: Embed research sources for Ask Forge RAG
+  // Phase 0.5 + 3.25 + 3.5: Embedding, Classification, Outcome Map
+  //
+  // Embedding has no dependency on the classification/outcome-map pipeline
+  // so we run it concurrently to save wall-clock time.
   // =======================================================================
-  if (allSources.some((s) => s.status === "ready")) {
-    const tEmbed = Date.now();
-    progress("embedding", 12, `Embedding ${allSources.filter((s) => s.status === "ready").length} sources for Ask Forge...`);
 
-    const embedSources: Array<{ type: string; title: string; text: string }> = [];
-    for (const result of sourceResults) {
-      if (result.status === "fulfilled" && result.value.text) {
-        const firstSource = result.value.sources.find((s) => s.status === "ready");
-        embedSources.push({
-          type: firstSource?.type ?? "website",
-          title: firstSource?.title ?? "Source",
-          text: result.value.text,
-        });
+  // --- Build embedding task (fire-and-forget, runs in parallel) ----------
+  const embeddingTask = allSources.some((s) => s.status === "ready")
+    ? (async () => {
+        const tEmbed = Date.now();
+        progress("embedding", 12, `Embedding ${allSources.filter((s) => s.status === "ready").length} sources for Ask Forge...`);
+
+        const embedSources: Array<{ type: string; title: string; text: string }> = [];
+        for (const result of sourceResults) {
+          if (result.status === "fulfilled" && result.value.text) {
+            const firstSource = result.value.sources.find((s) => s.status === "ready");
+            embedSources.push({
+              type: firstSource?.type ?? "website",
+              title: firstSource?.title ?? "Source",
+              text: result.value.text,
+            });
+          }
+        }
+        if (docResult?.text) {
+          const firstDoc = docResult.sources.find((s) => s.status === "ready");
+          embedSources.push({
+            type: firstDoc?.type ?? "upload",
+            title: firstDoc?.title ?? "Uploaded documents",
+            text: docResult.text,
+          });
+        }
+
+        const embeddedCount = await embedResearchSources(
+          {
+            sessionId: input.sessionId ?? input.customerName,
+            customerName: input.customerName,
+            industryId: input.industryId ?? "",
+            sources: embedSources.filter((s) => s.text.length > 0),
+          },
+          log,
+        );
+
+        progress("embedding", 14, `Embedded ${embeddedCount} chunks for Ask Forge`);
+        passTimings["embedding"] = Date.now() - tEmbed;
+      })()
+    : Promise.resolve();
+
+  // --- Classification + outcome map pipeline (runs in parallel with embedding)
+  const classificationAndOutcomeTask = (async () => {
+    let industryIdInner = input.industryId ?? "";
+    let industryNameInner = "";
+    let generatedOutcomeMapInner = false;
+
+    const allOutcomes = await getAllIndustryOutcomes();
+    const allOutcomeSummaries = allOutcomes.map((o) => ({ id: o.id, name: o.name }));
+
+    if (industryIdInner) {
+      const normalized = normalizeIndustryId(industryIdInner, allOutcomeSummaries);
+      if (normalized && normalized !== industryIdInner) {
+        log.info("Normalized industry ID", { original: industryIdInner, normalized });
+        industryIdInner = normalized;
       }
     }
-    if (docResult?.text) {
-      const firstDoc = docResult.sources.find((s) => s.status === "ready");
-      embedSources.push({
-        type: firstDoc?.type ?? "upload",
-        title: firstDoc?.title ?? "Uploaded documents",
-        text: docResult.text,
+
+    if (!industryIdInner) {
+      progress("industry-classification", 17, `Classifying industry from ${allSources.filter((s) => s.status === "ready").length} sources...`);
+      t0 = Date.now();
+
+      const classification = await runIndustryClassification(combinedSourceText, allOutcomeSummaries, {
+        llm,
+        logger: log,
+        signal,
+        modelTier,
       });
+
+      industryIdInner = classification.industryId;
+      industryNameInner = classification.industryName;
+
+      const normalized = normalizeIndustryId(industryIdInner, allOutcomeSummaries);
+      if (normalized) {
+        industryIdInner = normalized;
+        const match = allOutcomeSummaries.find((o) => o.id === normalized);
+        if (match) industryNameInner = match.name;
+      }
+
+      progress("industry-classification", 19, `Classified as ${industryNameInner} (${Math.round(classification.confidence * 100)}% confidence)`);
+      passTimings["industry-classification"] = Date.now() - t0;
     }
 
-    const embeddedCount = await embedResearchSources(
-      {
-        sessionId: input.sessionId ?? input.customerName,
-        customerName: input.customerName,
-        industryId: input.industryId ?? "",
-        sources: embedSources.filter((s) => s.text.length > 0),
-      },
-      log,
-    );
-
-    progress("embedding", 14, `Embedded ${embeddedCount} chunks for Ask Forge`);
-    passTimings["embedding"] = Date.now() - tEmbed;
-  }
-
-  // =======================================================================
-  // Phase 3.25: Industry Classification (if needed)
-  // =======================================================================
-  let industryId = input.industryId ?? "";
-  let industryName = "";
-  let generatedOutcomeMap = false;
-
-  const allOutcomes = await getAllIndustryOutcomes();
-  const allOutcomeSummaries = allOutcomes.map((o) => ({ id: o.id, name: o.name }));
-
-  // Normalize any user-provided industry ID against known outcomes
-  if (industryId) {
-    const normalized = normalizeIndustryId(industryId, allOutcomeSummaries);
-    if (normalized && normalized !== industryId) {
-      log.info("Normalized industry ID", { original: industryId, normalized });
-      industryId = normalized;
-    }
-  }
-
-  if (!industryId) {
-    progress("industry-classification", 17, `Classifying industry from ${allSources.filter((s) => s.status === "ready").length} sources...`);
-    t0 = Date.now();
-
-    const classification = await runIndustryClassification(combinedSourceText, allOutcomeSummaries, {
-      llm,
-      logger: log,
-      signal,
-    });
-
-    industryId = classification.industryId;
-    industryName = classification.industryName;
-
-    // Normalize the classification result too
-    const normalized = normalizeIndustryId(industryId, allOutcomeSummaries);
-    if (normalized) {
-      industryId = normalized;
-      const match = allOutcomeSummaries.find((o) => o.id === normalized);
-      if (match) industryName = match.name;
+    if (!industryNameInner) {
+      const outcome = await getIndustryOutcomeAsync(industryIdInner);
+      industryNameInner = outcome?.name ?? industryIdInner;
     }
 
-    progress("industry-classification", 19, `Classified as ${industryName} (${Math.round(classification.confidence * 100)}% confidence)`);
-    passTimings["industry-classification"] = Date.now() - t0;
-  }
+    checkCancelled(signal);
 
-  if (!industryName) {
-    const outcome = await getIndustryOutcomeAsync(industryId);
-    industryName = outcome?.name ?? industryId;
-  }
+    // Phase 3.5: Outcome Map + Enrichment
+    progress("outcome-map-generation", 20, "Checking existing industry knowledge...");
 
-  checkCancelled(signal);
+    const existingOutcome = await getIndustryOutcomeAsync(industryIdInner);
+    const existingEnrichment = await getMasterRepoEnrichmentAsync(industryIdInner);
 
-  // =======================================================================
-  // Phase 3.5: Outcome Map + Enrichment (3-case logic)
-  // =======================================================================
-  progress("outcome-map-generation", 20, "Checking existing industry knowledge...");
+    if (existingOutcome && existingEnrichment) {
+      progress("outcome-map-generation", 28, `Using existing outcome map + enrichment for ${industryNameInner}`);
+      log.info("Outcome map + enrichment both exist, skipping generation", { industryId: industryIdInner });
+    } else if (existingOutcome && !existingEnrichment) {
+      progress("outcome-map-generation", 21, `Generating data asset enrichment for ${industryNameInner}...`);
+      t0 = Date.now();
 
-  const existingOutcome = await getIndustryOutcomeAsync(industryId);
-  const existingEnrichment = await getMasterRepoEnrichmentAsync(industryId);
+      await runEnrichmentOnlyGeneration(industryIdInner, industryNameInner, existingOutcome, combinedSourceText, {
+        llm,
+        logger: log,
+        signal,
+        modelTier,
+      });
 
-  if (existingOutcome && existingEnrichment) {
-    // Case 1: Both exist -- skip entirely
-    progress("outcome-map-generation", 28, `Using existing outcome map + enrichment for ${industryName}`);
-    log.info("Outcome map + enrichment both exist, skipping generation", { industryId });
-  } else if (existingOutcome && !existingEnrichment) {
-    // Case 2: Outcome exists, enrichment missing -- generate enrichment only (lighter)
-    progress("outcome-map-generation", 21, `Generating data asset enrichment for ${industryName}...`);
-    t0 = Date.now();
+      generatedOutcomeMapInner = true;
+      const reloadedEnrichment = await getMasterRepoEnrichmentAsync(industryIdInner);
+      progress("outcome-map-generation", 28, `Generated ${reloadedEnrichment?.dataAssets?.length ?? 0} data assets`);
+      passTimings["outcome-map-generation"] = Date.now() - t0;
+    } else {
+      progress("outcome-map-generation", 21, `No existing outcome map -- generating for ${industryNameInner}...`);
+      t0 = Date.now();
 
-    await runEnrichmentOnlyGeneration(industryId, industryName, existingOutcome, combinedSourceText, {
-      llm,
-      logger: log,
-      signal,
-    });
+      const genResult = await runOutcomeMapGeneration(industryIdInner, industryNameInner, combinedSourceText, {
+        llm,
+        logger: log,
+        signal,
+        modelTier,
+      });
 
-    generatedOutcomeMap = true;
-    const reloadedEnrichment = await getMasterRepoEnrichmentAsync(industryId);
-    progress("outcome-map-generation", 28, `Generated ${reloadedEnrichment?.dataAssets?.length ?? 0} data assets`);
-    passTimings["outcome-map-generation"] = Date.now() - t0;
-  } else {
-    // Case 3: Neither exists -- full generation
-    progress("outcome-map-generation", 21, `No existing outcome map -- generating for ${industryName}...`);
-    t0 = Date.now();
+      generatedOutcomeMapInner = true;
+      progress("outcome-map-generation", 28, `Generated ${genResult.enrichment.dataAssets.length} data assets and ${genResult.enrichment.useCases.length} use cases`);
+      passTimings["outcome-map-generation"] = Date.now() - t0;
+    }
 
-    const genResult = await runOutcomeMapGeneration(industryId, industryName, combinedSourceText, {
-      llm,
-      logger: log,
-      signal,
-    });
+    return { industryId: industryIdInner, industryName: industryNameInner, generatedOutcomeMap: generatedOutcomeMapInner };
+  })();
 
-    generatedOutcomeMap = true;
-    progress("outcome-map-generation", 28, `Generated ${genResult.enrichment.dataAssets.length} data assets and ${genResult.enrichment.useCases.length} use cases`);
-    passTimings["outcome-map-generation"] = Date.now() - t0;
-  }
+  // Wait for both pipelines to finish
+  const [, classResult] = await Promise.all([embeddingTask, classificationAndOutcomeTask]);
+  const { industryId, industryName, generatedOutcomeMap } = classResult;
 
   checkCancelled(signal);
 
@@ -359,7 +371,7 @@ export async function runResearchEngine(
       outcomeMapContext,
       combinedSourceText,
       input.scope,
-      { llm, logger: log, signal },
+      { llm, logger: log, signal, modelTier },
     );
 
     companyProfile = quickResult.companyProfile ?? null;
@@ -378,7 +390,7 @@ export async function runResearchEngine(
       outcomeMapContext,
       benchmarkContext,
       combinedSourceText,
-      { llm, logger: log, signal, maxTokens: budget.maxTokensPerPass },
+      { llm, logger: log, signal, maxTokens: budget.maxTokensPerPass, modelTier },
     );
     passTimings["industry-landscape"] = Date.now() - t0;
     progress("industry-landscape", 45, `Identified ${industryLandscape.marketForces?.length ?? 0} market forces, ${industryLandscape.keyBenchmarks?.length ?? 0} benchmarks`);
@@ -394,7 +406,7 @@ export async function runResearchEngine(
       dataAssetsContext,
       combinedSourceText,
       input.scope,
-      { llm, logger: log, signal, maxTokens: budget.maxTokensPerPass },
+      { llm, logger: log, signal, maxTokens: budget.maxTokensPerPass, modelTier },
     );
 
     companyProfile = combined.companyProfile;
@@ -416,7 +428,7 @@ export async function runResearchEngine(
       outcomeMapContext,
       benchmarkContext,
       combinedSourceText,
-      { llm, logger: log, signal, maxTokens: budget.maxTokensPerPass },
+      { llm, logger: log, signal, maxTokens: budget.maxTokensPerPass, modelTier },
     );
     passTimings["industry-landscape"] = Date.now() - t0;
     progress("industry-landscape", 35, `Identified ${industryLandscape.marketForces?.length ?? 0} market forces, ${industryLandscape.keyBenchmarks?.length ?? 0} benchmarks`);
@@ -431,7 +443,7 @@ export async function runResearchEngine(
       industryLandscape,
       combinedSourceText,
       input.scope,
-      { llm, logger: log, signal, maxTokens: budget.maxTokensPerPass },
+      { llm, logger: log, signal, maxTokens: budget.maxTokensPerPass, modelTier },
     );
     passTimings["company-deep-dive"] = Date.now() - t0;
     progress("company-deep-dive", 52, `Found ${companyProfile.statedPriorities?.length ?? 0} stated priorities, ${companyProfile.urgencySignals?.length ?? 0} urgency signals`);
@@ -446,7 +458,7 @@ export async function runResearchEngine(
       companyProfile,
       dataAssetsContext,
       input.scope,
-      { llm, logger: log, signal, maxTokens: budget.maxTokensPerPass },
+      { llm, logger: log, signal, maxTokens: budget.maxTokensPerPass, modelTier },
     );
     passTimings["data-strategy-mapping"] = Date.now() - t0;
     progress("data-strategy-mapping", 72, `Mapped ${dataStrategy.matchedDataAssetIds?.length ?? 0} assets, maturity: ${dataStrategy.dataMaturityAssessment ?? "unknown"}`);
@@ -462,7 +474,7 @@ export async function runResearchEngine(
       companyProfile,
       dataStrategy,
       input.scope,
-      { llm, logger: log, signal, maxTokens: budget.maxTokensPerPass },
+      { llm, logger: log, signal, maxTokens: budget.maxTokensPerPass, modelTier },
     );
     passTimings["demo-narrative"] = Date.now() - t0;
     progress("demo-narrative", 95, `Designed ${demoNarrative.killerMoments?.length ?? 0} killer moments, ${demoNarrative.demoFlow?.length ?? 0}-step demo flow`);

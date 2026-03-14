@@ -9,6 +9,7 @@
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { resolveResearchEndpoint } from "../resolve-endpoint";
 import { createOutcomeMap, setCustomEnrichment } from "@/lib/lakebase/outcome-maps";
+import type { TaskTier } from "@/lib/dbx/model-registry";
 import type { LLMClient } from "@/lib/ports/llm-client";
 import type { Logger } from "@/lib/ports/logger";
 import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
@@ -52,16 +53,17 @@ export async function runOutcomeMapGeneration(
     llm: LLMClient;
     logger: Logger;
     signal?: AbortSignal;
+    modelTier?: TaskTier;
   },
 ): Promise<{ outcomeMap: IndustryOutcome; enrichment: MasterRepoEnrichment }> {
-  const { llm, logger: log, signal } = opts;
+  const { llm, logger: log, signal, modelTier } = opts;
 
   const prompt = OUTCOME_MAP_GENERATION_PROMPT
     .replace(/{industry_name}/g, industryName)
     .replace("{few_shot_example}", FEW_SHOT_EXAMPLE)
     .replace("{source_context}", sourceContext.slice(0, 20_000) || "(No source material available)");
 
-  const endpoint = resolveResearchEndpoint();
+  const endpoint = resolveResearchEndpoint(modelTier);
 
   log.info("Generating outcome map", { industryId, industryName });
 
@@ -125,16 +127,19 @@ export async function runEnrichmentOnlyGeneration(
     llm: LLMClient;
     logger: Logger;
     signal?: AbortSignal;
+    modelTier?: TaskTier;
   },
 ): Promise<MasterRepoEnrichment> {
-  const { llm, logger: log, signal } = opts;
+  const { llm, logger: log, signal, modelTier } = opts;
 
   const prompt = ENRICHMENT_ONLY_GENERATION_PROMPT
     .replace(/{industry_name}/g, industryName)
     .replace("{outcome_map_json}", JSON.stringify(existingOutcome, null, 2).slice(0, 15_000))
     .replace("{source_context}", sourceContext.slice(0, 15_000) || "(No source material available)");
 
-  const endpoint = resolveResearchEndpoint();
+  // Enrichment-only is a lighter pass; prefer generation tier even if
+  // the budget specifies reasoning, unless nothing faster is available.
+  const endpoint = resolveResearchEndpoint(modelTier === "reasoning" ? "generation" : modelTier);
 
   log.info("Generating enrichment only", { industryId, industryName });
 
