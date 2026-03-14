@@ -214,6 +214,36 @@ REVIEW CHECKLIST (evaluate each dimension independently):
    - from_json() alias uses canonical name \`parsed_result\` (not \`parsed\`, \`result\`, or other abbreviations)
 `.trim();
 
+export const DATABRICKS_SQL_SELF_CHECK = `
+BEFORE YOU RESPOND -- verify your SQL against this checklist:
+
+CORRECTNESS:
+[ ] Every column reference exists in the AVAILABLE TABLES AND COLUMNS section
+[ ] JOIN conditions match the foreign key relationships provided
+[ ] Every non-aggregated column in SELECT appears in GROUP BY (or is inside an aggregate)
+[ ] No SELECT-list alias reused in sibling expressions (compute in CTE first)
+[ ] No aggregate function nested inside a window function or vice versa
+
+PERFORMANCE:
+[ ] WHERE filters applied early (before aggregation, not in HAVING)
+[ ] Final SELECT includes ORDER BY ... LIMIT N (not RANK/DENSE_RANK for top-N)
+[ ] SELECT DISTINCT used ONLY when source genuinely has duplicates (not defensively)
+[ ] Financial columns cast to DECIMAL(18,2) BEFORE aggregation
+
+READABILITY:
+[ ] Multi-line SQL with SELECT/FROM/WHERE/JOIN/GROUP BY/ORDER BY on separate lines
+[ ] 3-7 CTEs with business-friendly names (not cte1, temp, base)
+[ ] Identifying columns (names, IDs) included in entity-level output
+
+DATABRICKS IDIOMS:
+[ ] PERCENTILE_APPROX instead of MEDIAN()
+[ ] array_join(collect_list(col), ',') instead of STRING_AGG()
+[ ] try_to_date/try_to_timestamp instead of TO_DATE/TO_TIMESTAMP
+[ ] COLLATE UTF8_LCASE on BOTH sides for case-insensitive comparisons
+[ ] Explicit window frames (ROWS BETWEEN ...) for cumulative calculations
+[ ] Named windows NOT extended with frame specs (inline full spec instead)
+`.trim();
+
 export const DATABRICKS_DATA_MODELING_RULES = `
 DATA MODELING RULES (for schema design, table analysis, and dimensional modeling):
 

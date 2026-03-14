@@ -87,8 +87,8 @@ function buildReviewPrompt(sql: string, opts: ReviewOptions): string {
 
   const fixInstruction = opts.requestFix
     ? opts.schemaContext
-      ? `If the verdict is "warn" or "fail", include a "fixed_sql" field with the corrected SQL. CRITICAL CONSTRAINT: The fix must ONLY use columns that appear in the "Available Schema" section above. Do NOT invent, guess, or rename any column -- if a column does not exist in the schema, remove the expression rather than substituting. Do NOT introduce new table aliases or column names that are not in the original SQL or schema.`
-      : `If the verdict is "warn" or "fail", include a "fixed_sql" field with the corrected SQL. Preserve the original table/column references since no schema is available for validation.`
+      ? `If the verdict is "fail", include a "fixed_sql" field with the corrected SQL. Do NOT generate fixed_sql for "warn" or "pass" verdicts -- the SQL is functional and should not be rewritten for style. CRITICAL CONSTRAINT: The fix must ONLY use columns that appear in the "Available Schema" section above. Do NOT invent, guess, or rename any column -- if a column does not exist in the schema, remove the expression rather than substituting. Do NOT introduce new table aliases or column names that are not in the original SQL or schema.`
+      : `If the verdict is "fail", include a "fixed_sql" field with the corrected SQL. Do NOT generate fixed_sql for "warn" or "pass" verdicts -- the SQL is functional. Preserve the original table/column references since no schema is available for validation.`
     : `Do NOT include a "fixed_sql" field.`;
 
   const skillContext = resolveForPipelineStep("sql-generation", { contextBudget: 3000 });
@@ -121,10 +121,16 @@ ${DATABRICKS_SQL_RULES}
 
 ${DATABRICKS_SQL_REVIEW_CHECKLIST}
 
+## Severity Classification (mandatory)
+- "error": Will cause RUNTIME FAILURE or INCORRECT RESULTS -- syntax errors, wrong JOIN keys, hallucinated columns, missing GROUP BY, alias reuse in same SELECT, aggregate inside window function, unsupported functions (MEDIAN, STRING_AGG)
+- "warning": Functional but suboptimal -- missing DECIMAL cast, no explicit window frame, column order, missing COLLATE, defensive DISTINCT, missing LIMIT on ORDER BY
+- "info": Stylistic preference -- pipe syntax suggestion, named windows, readability tweaks, formatting
+CRITICAL: Only classify as "error" if the query would FAIL or return WRONG DATA at runtime. Style and idiom improvements are "warning" or "info".
+
 ## Instructions
-1. Evaluate each checklist dimension and identify concrete issues.
+1. Evaluate each checklist dimension and identify concrete issues using the severity classification above.
 2. Assign a quality score from 0 to 100.
-3. Set verdict: "pass" (score >= 80, no errors), "warn" (score 50-79 or warnings only), "fail" (score < 50 or any error-severity issue).
+3. Set verdict: "pass" (score >= 80, no errors), "warn" (score 50-79 or warnings only), "fail" (score < 50 or any error-severity issue -- remember only runtime failures qualify as "error").
 4. ${fixInstruction}
 5. Provide actionable improvement suggestions even when the SQL passes.
 
@@ -167,8 +173,8 @@ function buildBatchReviewPrompt(
 
   const fixInstruction = requestFix
     ? schemaContext
-      ? ` If the verdict is "warn" or "fail", include a "fixed_sql" field with the corrected SQL. CRITICAL: The fix must ONLY use columns that appear in the "Available Schema" section above. Do NOT invent, guess, or rename any column.`
-      : ` If the verdict is "warn" or "fail", include a "fixed_sql" field with the corrected SQL. Preserve the original table/column references since no schema is available.`
+      ? ` If the verdict is "fail", include a "fixed_sql" field with the corrected SQL. Do NOT generate fixed_sql for "warn" or "pass" -- the SQL is functional. CRITICAL: The fix must ONLY use columns that appear in the "Available Schema" section above. Do NOT invent, guess, or rename any column.`
+      : ` If the verdict is "fail", include a "fixed_sql" field with the corrected SQL. Do NOT generate fixed_sql for "warn" or "pass" -- the SQL is functional. Preserve the original table/column references since no schema is available.`
     : "";
 
   const fixedSqlField = requestFix ? ', "fixed_sql": "<corrected SQL or null if pass>"' : "";
@@ -181,6 +187,12 @@ ${schemaBlock}${batchSkillSection}
 ${DATABRICKS_SQL_RULES}
 
 ${DATABRICKS_SQL_REVIEW_CHECKLIST}
+
+## Severity Classification (mandatory)
+- "error": Will cause RUNTIME FAILURE or INCORRECT RESULTS -- syntax errors, wrong JOIN keys, hallucinated columns, missing GROUP BY, alias reuse in same SELECT, unsupported functions (MEDIAN, STRING_AGG)
+- "warning": Functional but suboptimal -- missing DECIMAL cast, no explicit window frame, column order, missing COLLATE, defensive DISTINCT
+- "info": Stylistic preference -- pipe syntax suggestion, named windows, readability tweaks
+CRITICAL: Only classify as "error" if the expression would FAIL or return WRONG DATA at runtime.
 
 ## Instructions
 Review each item independently. For short expressions, focus on correctness, Databricks idiom adherence, and potential runtime errors.${schemaContext ? " Verify all table/column references exist in the provided schema." : ""}${fixInstruction}
