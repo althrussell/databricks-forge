@@ -15,14 +15,12 @@ import type { DataEngineInput, DataEngineResult, TableResult } from "./types";
 import type { TableDesign, DataNarrative, TablePhase } from "../types";
 
 /** Adapter: sql-reviewer returns ReviewResult; seed/fact passes expect (sql, error, context) => Promise<string>. */
-function adaptReviewAndFixSql(
-  sql: string,
-  error: string,
-  context?: string,
-): Promise<string> {
-  return sqlReviewerReviewAndFix(sql, { schemaContext: context }).then(
-    (r) => r.fixedSql ?? sql,
-  );
+function adaptReviewAndFixSql(sql: string, error: string, context?: string): Promise<string> {
+  return sqlReviewerReviewAndFix(sql, {
+    schemaContext: context,
+    runtimeError: error,
+    requestFix: true,
+  }).then((r) => r.fixedSql ?? sql);
 }
 
 import { runNarrativeDesign } from "./passes/narrative-design";
@@ -41,13 +39,12 @@ export class DataEngineCancelledError extends Error {
 const FACT_CONCURRENCY = 4;
 const DIM_CONCURRENCY = 4;
 
-export async function runDataEngine(
-  input: DataEngineInput,
-): Promise<DataEngineResult> {
+export async function runDataEngine(input: DataEngineInput): Promise<DataEngineResult> {
   const startTime = Date.now();
   const llm = input.deps?.llm ?? databricksLLMClient;
   const sql = input.deps?.sql ?? databricksSqlExecutor;
-  const log = input.deps?.logger ?? createScopedLogger({ origin: "DataEngine", module: "demo/data-engine" });
+  const log =
+    input.deps?.logger ?? createScopedLogger({ origin: "DataEngine", module: "demo/data-engine" });
   const reviewFn = input.deps?.reviewAndFixSql ?? adaptReviewAndFixSql;
   const signal = input.signal;
 
@@ -67,11 +64,11 @@ export async function runDataEngine(
   progress("Designing data narratives...", 5);
   checkCancelled(signal);
 
-  const narrativeResult = await runNarrativeDesign(
-    input.research,
-    input.targetRowCount,
-    { llm, logger: log, signal },
-  );
+  const narrativeResult = await runNarrativeDesign(input.research, input.targetRowCount, {
+    llm,
+    logger: log,
+    signal,
+  });
 
   const narratives: DataNarrative[] = narrativeResult.narratives.map((n) => ({
     title: n.title,
@@ -90,20 +87,17 @@ export async function runDataEngine(
   progress("Designing table schema...", 15);
   checkCancelled(signal);
 
-  const tables = await runSchemaDesign(
-    input.research,
-    narratives,
-    input.targetRowCount,
-    { llm, logger: log, signal },
-  );
+  const tables = await runSchemaDesign(input.research, narratives, input.targetRowCount, {
+    llm,
+    logger: log,
+    signal,
+  });
 
   input.onTablesReady?.(tables);
 
   // Create schema if it doesn't exist
   try {
-    await sql.execute(
-      `CREATE SCHEMA IF NOT EXISTS \`${input.catalog}\`.\`${input.schema}\``,
-    );
+    await sql.execute(`CREATE SCHEMA IF NOT EXISTS \`${input.catalog}\`.\`${input.schema}\``);
   } catch (err) {
     log.error("Failed to create schema", { error: String(err) });
     throw err;
@@ -180,9 +174,7 @@ export async function runDataEngine(
   const successfulDimensions = dimensionTables.filter((d) => succeededDimNames.has(d.name));
 
   if (successfulDimensions.length < dimensionTables.length) {
-    const failed = dimensionTables
-      .filter((d) => !succeededDimNames.has(d.name))
-      .map((d) => d.name);
+    const failed = dimensionTables.filter((d) => !succeededDimNames.has(d.name)).map((d) => d.name);
     log.warn("Excluding failed dimensions from fact generation context", {
       failed,
       remaining: successfulDimensions.map((d) => d.name),
@@ -226,8 +218,8 @@ export async function runDataEngine(
 
       // Skip if an upstream fact dependency failed
       const factDeps = getFactDependencies(table, factTables);
-      const failedFactDep = factDeps.find(
-        (dep) => tableResults.some((r) => r.name === dep && r.status === "failed"),
+      const failedFactDep = factDeps.find((dep) =>
+        tableResults.some((r) => r.name === dep && r.status === "failed"),
       );
       if (failedFactDep) {
         log.warn("Skipping fact table -- upstream fact dependency failed", {
@@ -236,7 +228,10 @@ export async function runDataEngine(
         });
         input.onTablePhase?.(table.name, "failed");
         skippedInWave.push({
-          name: table.name, fqn, rowCount: 0, status: "failed",
+          name: table.name,
+          fqn,
+          rowCount: 0,
+          status: "failed",
           error: `Skipped: fact dependency '${failedFactDep}' failed`,
           retryCount: 0,
         });
@@ -255,7 +250,10 @@ export async function runDataEngine(
         });
         input.onTablePhase?.(table.name, "failed");
         skippedInWave.push({
-          name: table.name, fqn, rowCount: 0, status: "failed",
+          name: table.name,
+          fqn,
+          rowCount: 0,
+          status: "failed",
           error: `Skipped: all dimension dependencies failed (${dimRefs.join(", ")})`,
           retryCount: 0,
         });
@@ -267,52 +265,54 @@ export async function runDataEngine(
 
     tableResults.push(...skippedInWave);
 
-    const waveTasks = executableInWave.map((table: TableDesign) => async (): Promise<TableResult> => {
-      checkCancelled(signal);
-      const t0 = Date.now();
+    const waveTasks = executableInWave.map(
+      (table: TableDesign) => async (): Promise<TableResult> => {
+        checkCancelled(signal);
+        const t0 = Date.now();
 
-      log.info("Generating fact table", {
-        table: table.name,
-        columns: table.columns.length,
-        rowTarget: table.rowTarget,
-        wave: waveIdx,
-      });
+        log.info("Generating fact table", {
+          table: table.name,
+          columns: table.columns.length,
+          rowTarget: table.rowTarget,
+          wave: waveIdx,
+        });
 
-      const onPhase = (phase: TablePhase) => input.onTablePhase?.(table.name, phase);
-      const result = await runFactGeneration(
-        table,
-        input.catalog,
-        input.schema,
-        successfulDimensions,
-        narratives,
-        {
-          customerName: input.research.customerName,
-          industryId: input.research.industryId,
-          nomenclature: input.research.nomenclature,
-        },
-        { llm, sql, logger: log, signal, onPhase, reviewAndFixSql: reviewFn },
-      );
+        const onPhase = (phase: TablePhase) => input.onTablePhase?.(table.name, phase);
+        const result = await runFactGeneration(
+          table,
+          input.catalog,
+          input.schema,
+          successfulDimensions,
+          narratives,
+          {
+            customerName: input.research.customerName,
+            industryId: input.research.industryId,
+            nomenclature: input.research.nomenclature,
+          },
+          { llm, sql, logger: log, signal, onPhase, reviewAndFixSql: reviewFn },
+        );
 
-      const fqn = `\`${input.catalog}\`.\`${input.schema}\`.\`${table.name}\``;
-      tableFqns.push(fqn);
+        const fqn = `\`${input.catalog}\`.\`${input.schema}\`.\`${table.name}\``;
+        tableFqns.push(fqn);
 
-      log.info(result.error ? "Fact table failed" : "Fact table created", {
-        table: table.name,
-        rowCount: result.rowCount,
-        durationMs: Date.now() - t0,
-        wave: waveIdx,
-        ...(result.error ? { error: result.error } : {}),
-      });
+        log.info(result.error ? "Fact table failed" : "Fact table created", {
+          table: table.name,
+          rowCount: result.rowCount,
+          durationMs: Date.now() - t0,
+          wave: waveIdx,
+          ...(result.error ? { error: result.error } : {}),
+        });
 
-      return {
-        name: table.name,
-        fqn,
-        rowCount: result.rowCount,
-        status: result.error ? "failed" : "completed",
-        error: result.error,
-        retryCount: 0,
-      };
-    });
+        return {
+          name: table.name,
+          fqn,
+          rowCount: result.rowCount,
+          status: result.error ? "failed" : "completed",
+          error: result.error,
+          retryCount: 0,
+        };
+      },
+    );
 
     const waveResults = await mapWithConcurrency(waveTasks, FACT_CONCURRENCY);
     tableResults.push(...waveResults);
@@ -327,12 +327,10 @@ export async function runDataEngine(
   log.info("Pass 4: Validation", { totalTables: tables.length });
   progress("Validating generated data...", 90);
 
-  const validationSummary = await runValidation(
-    tables,
-    input.catalog,
-    input.schema,
-    { sql, logger: log },
-  );
+  const validationSummary = await runValidation(tables, input.catalog, input.schema, {
+    sql,
+    logger: log,
+  });
 
   // =======================================================================
   // Result
@@ -377,7 +375,10 @@ function getFactDependencies(table: TableDesign, allFactTables: TableDesign[]): 
 }
 
 /** Topologically sort fact tables into dependency waves. */
-function buildFactWaves(factTables: TableDesign[], completedTableNames: Set<string>): TableDesign[][] {
+function buildFactWaves(
+  factTables: TableDesign[],
+  completedTableNames: Set<string>,
+): TableDesign[][] {
   const remaining = [...factTables];
   const waves: TableDesign[][] = [];
   const placed = new Set<string>(completedTableNames);

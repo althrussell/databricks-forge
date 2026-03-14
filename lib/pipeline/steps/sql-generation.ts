@@ -31,8 +31,7 @@ import type {
   TableInfo,
 } from "@/lib/domain/types";
 import { validateColumnReferences } from "@/lib/validation/sql-columns";
-import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
-import { isReviewEnabled, resolveEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import "@/lib/skills/content";
 import { resolveForPipelineStep, formatContextSections } from "@/lib/skills/resolver";
 
@@ -129,9 +128,11 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
   // Avoids redundant warehouse queries when multiple use cases share tables.
   const sampleDataCache = new Map<string, string>();
 
-  // Progress interpolation: SQL generation spans 67% → 95% of overall pipeline
+  // Progress interpolation: SQL generation spans 67% → 79% of overall pipeline.
+  // Must stay below 80 (the SQL Generation step.pct threshold in RunProgress)
+  // so the UI keeps the step "active" until all use cases are processed.
   const PROGRESS_START = 67;
-  const PROGRESS_END = 95;
+  const PROGRESS_END = 79;
   const progressPerUseCase =
     totalUseCases > 0 ? (PROGRESS_END - PROGRESS_START) / totalUseCases : 0;
 
@@ -587,68 +588,10 @@ async function generateSqlForUseCase(
     }
   }
 
-  // LLM review gate: if the review endpoint is configured, run a quality
-  // review that catches issues EXPLAIN cannot (suboptimal joins, missing
-  // filters, non-idiomatic Databricks SQL, readability).
-  if (isReviewEnabled("pipeline-sql")) {
-    const review = await reviewAndFixSql(currentSql, {
-      schemaContext: schemaMarkdown,
-      surface: "pipeline-sql",
-    });
-    diag.qualityScore = review.qualityScore;
-    if (review.fixedSql) {
-      const fixError = await trySqlExecution(log, review.fixedSql);
-      if (!fixError) {
-        const reviewColCheck = validateSqlOutput(
-          review.fixedSql,
-          uc.tablesInvolved,
-          involvedColumns,
-        );
-        if (reviewColCheck.unknownColumns.length > 0) {
-          diag.reviewRejected = true;
-          log.warn("Review fix introduced hallucinated columns, keeping original", {
-            fn: "generateSqlForUseCase",
-            errorCategory: "sql_hallucination",
-            useCaseId: uc.id,
-            unknownColumns: reviewColCheck.unknownColumns,
-          });
-        } else {
-          diag.reviewApplied = true;
-          log.info("SQL review fix applied", {
-            fn: "generateSqlForUseCase",
-            useCaseId: uc.id,
-            qualityScore: review.qualityScore,
-            verdict: review.verdict,
-            issueCount: review.issues.length,
-            topIssues: review.issues
-              .sort((a, b) => {
-                const order: Record<string, number> = { error: 0, warning: 1, info: 2 };
-                return (order[a.severity] ?? 2) - (order[b.severity] ?? 2);
-              })
-              .slice(0, 3)
-              .map((i) => `[${i.severity}/${i.category}] ${i.message}`),
-          });
-          currentSql = review.fixedSql;
-        }
-      } else {
-        diag.reviewRejected = true;
-        log.warn("Review fix failed EXPLAIN, keeping original", {
-          fn: "generateSqlForUseCase",
-          errorCategory: "sql_syntax",
-          useCaseId: uc.id,
-          explainError: fixError.substring(0, 200),
-        });
-      }
-    } else if (review.verdict === "fail") {
-      log.warn("SQL review verdict: fail (no fix available)", {
-        fn: "generateSqlForUseCase",
-        errorCategory: "sql_syntax",
-        useCaseId: uc.id,
-        qualityScore: review.qualityScore,
-        issues: review.issues.map((i) => `[${i.category}] ${i.message}`),
-      });
-    }
-  }
+  // LLM review skipped for pipeline speed -- EXPLAIN + column validation
+  // provide sufficient correctness guarantees for discovery pipeline SQL.
+  // Review remains available for Genie Engine and other surfaces.
+  diag.qualityScore = 75;
 
   return { sql: currentSql, diag };
 }

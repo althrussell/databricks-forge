@@ -63,6 +63,8 @@ export interface ReviewOptions {
   requestFix?: boolean;
   /** Maximum tokens for the reviewer response. */
   maxTokens?: number;
+  /** Runtime error from SQL execution -- injected into the prompt so the reviewer can target the fix. */
+  runtimeError?: string;
 }
 
 export interface BatchReviewItem {
@@ -81,6 +83,10 @@ export interface BatchReviewResult {
 // ---------------------------------------------------------------------------
 
 function buildReviewPrompt(sql: string, opts: ReviewOptions): string {
+  const runtimeErrorBlock = opts.runtimeError
+    ? `\n## Runtime Error (MUST FIX)\nThe SQL above was executed and failed with this error:\n\`\`\`\n${opts.runtimeError}\n\`\`\`\nYour fix MUST resolve this specific error. This takes priority over all other review checks.\n`
+    : "";
+
   const schemaBlock = opts.schemaContext
     ? `\n## Available Schema\n\`\`\`\n${opts.schemaContext}\n\`\`\`\n`
     : "";
@@ -115,7 +121,7 @@ IMPORTANT DIALECT CONTEXT: This is Databricks SQL (based on Spark SQL / ANSI SQL
 \`\`\`sql
 ${sql}
 \`\`\`
-${schemaBlock}${skillSection}
+${runtimeErrorBlock}${schemaBlock}${skillSection}
 ## Quality Rules
 ${DATABRICKS_SQL_RULES}
 
