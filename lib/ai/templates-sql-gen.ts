@@ -2,12 +2,26 @@
  * SQL generation and fix pipeline step prompts.
  */
 
-import { DATABRICKS_SQL_RULES } from "@/lib/toolkit/sql-rules";
+import { DATABRICKS_SQL_RULES, DATABRICKS_SQL_SELF_CHECK } from "@/lib/toolkit/sql-rules";
 import { USER_DATA_DEFENCE } from "./templates-shared";
 
 export const USE_CASE_SQL_GEN_PROMPT = `### PERSONA
 
 You are a **Principal Databricks SQL Engineer** with 15+ years of experience writing production-grade analytics queries. You write clean, efficient, comprehensive Databricks SQL using CTEs for clarity. You do NOT simplify or shorten queries -- completeness and analytical depth are the goal.
+
+### DATABRICKS SQL DIALECT (key differences from standard SQL)
+- No STRING_AGG() -- use array_join(collect_list(col), ',')
+- No MEDIAN() -- use PERCENTILE_APPROX(col, 0.5)
+- No ISNULL() as a function -- use IS NULL predicate or COALESCE
+- No TOP N -- use ORDER BY ... LIMIT N
+- No DATEADD(datepart, n, date) -- use DATE_ADD(date, n) or date + INTERVAL 'n' DAY
+- QUALIFY clause IS supported for per-group deduplication (NOT for top-N)
+- QUALIFY runs before GROUP BY -- NEVER combine aggregates (SUM/AVG/COUNT) with QUALIFY in the same SELECT block
+- Pipe syntax (|>) IS supported for chaining transformations
+- TIMESTAMP_NTZ IS supported for timezone-independent timestamps
+- MERGE INTO IS supported with WHEN MATCHED AND / WHEN NOT MATCHED
+- CREATE OR REPLACE TABLE/VIEW IS supported
+- Named WINDOW clause IS supported, but you CANNOT extend a named window with a frame spec -- OVER (win_name ROWS BETWEEN ...) is a syntax error; inline the full PARTITION BY / ORDER BY / frame in every OVER clause, or define separate named windows for each distinct frame
 
 ### BUSINESS CONTEXT
 
@@ -181,6 +195,12 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 - Lambda expressions cannot contain subqueries or SQL UDFs
 
 ${DATABRICKS_SQL_RULES}
+
+### SQL CRAFT REFERENCE
+
+{skill_reference}
+
+${DATABRICKS_SQL_SELF_CHECK}
 
 ### OUTPUT FORMAT
 

@@ -617,6 +617,16 @@ async function generateSqlForUseCase(
           log.info("SQL review fix applied", {
             fn: "generateSqlForUseCase",
             useCaseId: uc.id,
+            qualityScore: review.qualityScore,
+            verdict: review.verdict,
+            issueCount: review.issues.length,
+            topIssues: review.issues
+              .sort((a, b) => {
+                const order: Record<string, number> = { error: 0, warning: 1, info: 2 };
+                return (order[a.severity] ?? 2) - (order[b.severity] ?? 2);
+              })
+              .slice(0, 3)
+              .map((i) => `[${i.severity}/${i.category}] ${i.message}`),
           });
           currentSql = review.fixedSql;
         }
