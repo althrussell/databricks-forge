@@ -68,7 +68,7 @@ const navSections: NavSection[] = [
   },
   {
     label: "Demo",
-    items: [{ href: "/demo", label: "Demo Sessions", icon: DemoIcon, requiresDemoMode: true }],
+    items: [{ href: "/demo", label: "Demo Studio", icon: DemoIcon, requiresDemoMode: true }],
   },
   {
     label: "Migrate",

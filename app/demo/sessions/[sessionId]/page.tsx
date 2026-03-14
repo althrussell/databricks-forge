@@ -308,7 +308,7 @@ export default function DemoSessionPage() {
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Demo Sessions
+          Back to Demo Studio
         </Link>
         <Card className="border-destructive/30">
           <CardContent className="py-16 text-center">
@@ -333,7 +333,7 @@ export default function DemoSessionPage() {
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        Demo Sessions
+        Demo Studio
       </Link>
 
       {/* ================================================================
