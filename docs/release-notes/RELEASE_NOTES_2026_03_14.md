@@ -1,6 +1,6 @@
 # Release Notes -- 2026-03-14
 
-**Databricks Forge v0.32.0 → v0.37.2**
+**Databricks Forge v0.32.0 → v0.37.3**
 
 ---
 
@@ -459,6 +459,36 @@ Sources in the right-hand context panel now include clickable external-link icon
 
 ---
 
+## v0.37.3 -- Ask Forge & Health Check Fixes
+
+### Bug Fixes
+
+- **Ask Forge source noise in chat** -- Removed `enforceSourceCitations` which
+  appended a raw `### Sources` block (e.g. `[1] [GENERATED INTELLIGENCE] (use_case)`)
+  to the answer text when the LLM omitted inline citations. Sources are already
+  shown in the right-hand context panel; the duplicate text in the chat was noisy
+  and unhelpful.
+
+- **Genie builder modal stays open** -- The "Create Genie Space" action in Ask
+  Forge kept the modal open during generation with its own progress UI. Refactored
+  `GenieBuilderModal` to use `useGenieBuild().startBuild()` with async mode,
+  closing the modal immediately after Quick/Full selection and showing a persistent
+  build progress toast instead.
+
+- **Column config changes invisible in Preview** -- The health check "Preview
+  Changes" diff viewer only detected added/removed tables, not modifications to
+  `column_configs` on existing tables. Added `diffColumnConfigs()` that compares
+  column descriptions, synonyms, and flags within matched tables, with a new
+  "Column Configs" section showing added/modified/removed columns in amber/green/red.
+
+- **Benchmark fix only adds 3 questions** -- The health check fix for "Benchmark
+  questions exist (5+ recommended)" passed `useCases: []` and used the default
+  `BENCHMARKS_PER_BATCH` of 4. After validation drops, this yielded ~3 benchmarks.
+  Increased the fix target to 8 benchmarks per batch, comfortably exceeding the
+  5+ threshold after validation.
+
+---
+
 ## All Commits
 
 | Hash | Summary |
@@ -478,4 +508,5 @@ Sources in the right-hand context panel now include clickable external-link icon
 | *(pending)* | chore: consolidate release notes into single files per day |
 | `7c546aa` | fix: persist demo session catalog/schema so Launch Discovery works |
 | *(pending)* | fix: SEC EDGAR false match for non-US domains -- ccTLD guard, scored matching, dead code cleanup |
+| `80422be` | fix: Ask Forge source noise, Genie modal toast, health check column diff, benchmark count |
 | `c4ce20d` | fix: update mkdocs nav to consolidated release notes |
