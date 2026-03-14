@@ -6,7 +6,7 @@
  */
 
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
-import { resolveEndpoint } from "@/lib/dbx/client";
+import { resolveResearchEndpoint } from "../resolve-endpoint";
 import type { LLMClient } from "@/lib/ports/llm-client";
 import type { Logger } from "@/lib/ports/logger";
 import type { IndustryClassification } from "../types";
@@ -31,7 +31,7 @@ export async function runIndustryClassification(
     .replace("{existing_industries}", industriesList)
     .replace("{source_text}", sourceText.slice(0, 10_000));
 
-  const endpoint = resolveEndpoint("classification");
+  const endpoint = resolveResearchEndpoint();
 
   const response = await llm.chat({
     endpoint,

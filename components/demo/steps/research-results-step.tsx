@@ -147,7 +147,7 @@ export function ResearchResultsStep({
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">{status.message}</span>
           <span className="text-xs text-muted-foreground">
-            {elapsed}s elapsed
+            {elapsed >= 60 ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s` : `${elapsed}s`} elapsed
           </span>
         </div>
         <Progress value={status.percent} className="h-2" />
