@@ -113,7 +113,7 @@ export default function DemoPage() {
     <>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Demo Sessions</h1>
+          <h1 className="text-2xl font-semibold">Demo Studio</h1>
           <Button onClick={() => setWizardOpen(true)}>
             <Wand2 className="mr-2 h-4 w-4" />
             Launch Demo Wizard
