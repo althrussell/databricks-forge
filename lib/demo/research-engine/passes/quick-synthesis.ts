@@ -6,7 +6,7 @@
  */
 
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
-import { resolveEndpoint } from "@/lib/dbx/client";
+import { resolveResearchEndpoint } from "../resolve-endpoint";
 import type { LLMClient } from "@/lib/ports/llm-client";
 import type { Logger } from "@/lib/ports/logger";
 import type { DemoScope, DataNarrative } from "../../types";
@@ -50,7 +50,7 @@ export async function runQuickSynthesis(
     .replace("{website_text}", websiteText.slice(0, 6_000))
     .replace("{scope_context}", scopeContext);
 
-  const endpoint = resolveEndpoint("generation");
+  const endpoint = resolveResearchEndpoint();
 
   const response = await llm.chat({
     endpoint,

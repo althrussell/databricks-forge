@@ -178,16 +178,29 @@ export async function getCustomEnrichment(
 }
 
 /**
- * Store enrichment data on an existing custom outcome map.
+ * Store enrichment data for an industry. Uses upsert so it works for both
+ * custom outcome maps (row already exists) and built-in industries (no row
+ * in Lakebase -- creates a stub record to hold the enrichment).
  */
 export async function setCustomEnrichment(
   industryId: string,
   enrichment: MasterRepoEnrichment,
 ): Promise<void> {
   await withPrisma(async (prisma) => {
-    await prisma.forgeOutcomeMap.update({
+    const json = JSON.stringify(enrichment);
+    await prisma.forgeOutcomeMap.upsert({
       where: { industryId },
-      data: { enrichmentJson: JSON.stringify(enrichment) },
+      update: { enrichmentJson: json },
+      create: {
+        id: randomUUID(),
+        industryId,
+        name: industryId,
+        rawMarkdown: `# ${industryId}\n\nStub record for enrichment storage.`,
+        parsedJson: "{}",
+        useCaseCount: 0,
+        createdBy: "demo-wizard",
+        enrichmentJson: json,
+      },
     });
   });
 }

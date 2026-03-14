@@ -446,7 +446,11 @@ export function CatalogBrowser({
   const addSource = (source: string) => {
     if (!isSelected(source)) {
       const newExcluded = excludedSources.filter((e) => e !== source);
-      emitChange([...selectedSources, source], newExcluded, exclusionPatterns);
+      if (selectionMode === "schema") {
+        emitChange([source], newExcluded, exclusionPatterns);
+      } else {
+        emitChange([...selectedSources, source], newExcluded, exclusionPatterns);
+      }
     }
   };
 

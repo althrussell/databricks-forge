@@ -38,7 +38,8 @@ export class DataEngineCancelledError extends Error {
   }
 }
 
-const TABLE_CONCURRENCY = 2;
+const FACT_CONCURRENCY = 4;
+const DIM_CONCURRENCY = 4;
 
 export async function runDataEngine(
   input: DataEngineInput,
@@ -62,6 +63,7 @@ export async function runDataEngine(
   // =======================================================================
   // Pass 0: Narrative Design
   // =======================================================================
+  log.info("Pass 0: Narrative design", { sessionId: input.sessionId });
   progress("Designing data narratives...", 5);
   checkCancelled(signal);
 
@@ -81,6 +83,10 @@ export async function runDataEngine(
   // =======================================================================
   // Pass 1: Schema Design
   // =======================================================================
+  log.info("Pass 1: Schema design", {
+    narrativeCount: narratives.length,
+    targetRows: input.targetRowCount,
+  });
   progress("Designing table schema...", 15);
   checkCancelled(signal);
 
@@ -103,6 +109,8 @@ export async function runDataEngine(
     throw err;
   }
 
+  log.info("Schema created", { catalog: input.catalog, schema: input.schema });
+
   // =======================================================================
   // Pass 2: Seed Generation (dimension tables)
   // =======================================================================
@@ -111,10 +119,20 @@ export async function runDataEngine(
   const tableResults: TableResult[] = [];
   const tableFqns: string[] = [];
 
-  progress(`Generating ${dimensionTables.length} dimension tables...`, 25);
+  log.info("Pass 2: Seed generation", {
+    dimensionTables: dimensionTables.length,
+    concurrency: DIM_CONCURRENCY,
+  });
 
-  for (const table of dimensionTables) {
+  const dimTasks = dimensionTables.map((table: TableDesign) => async (): Promise<TableResult> => {
     checkCancelled(signal);
+    const t0 = Date.now();
+
+    log.info("Generating dimension table", {
+      table: table.name,
+      columns: table.columns.length,
+      rowTarget: table.rowTarget,
+    });
 
     const onPhase = (phase: TablePhase) => input.onTablePhase?.(table.name, phase);
     const result = await runSeedGeneration(
@@ -132,41 +150,14 @@ export async function runDataEngine(
 
     const fqn = `\`${input.catalog}\`.\`${input.schema}\`.\`${table.name}\``;
     tableFqns.push(fqn);
-    tableResults.push({
-      name: table.name,
-      fqn,
+
+    log.info(result.error ? "Dimension table failed" : "Dimension table created", {
+      table: table.name,
       rowCount: result.rowCount,
-      status: result.error ? "failed" : "completed",
-      error: result.error,
-      retryCount: 0,
+      durationMs: Date.now() - t0,
+      ...(result.error ? { error: result.error } : {}),
     });
-  }
 
-  // =======================================================================
-  // Pass 3: Fact Generation (fact/transaction tables -- bounded concurrency)
-  // =======================================================================
-  progress(`Generating ${factTables.length} fact tables...`, 50);
-
-  const factTasks = factTables.map((table: TableDesign) => async (): Promise<TableResult> => {
-    checkCancelled(signal);
-
-    const onPhase = (phase: TablePhase) => input.onTablePhase?.(table.name, phase);
-    const result = await runFactGeneration(
-      table,
-      input.catalog,
-      input.schema,
-      dimensionTables,
-      narratives,
-      {
-        customerName: input.research.customerName,
-        industryId: input.research.industryId,
-        nomenclature: input.research.nomenclature,
-      },
-      { llm, sql, logger: log, signal, onPhase, reviewAndFixSql: reviewFn },
-    );
-
-    const fqn = `\`${input.catalog}\`.\`${input.schema}\`.\`${table.name}\``;
-    tableFqns.push(fqn);
     return {
       name: table.name,
       fqn,
@@ -177,12 +168,127 @@ export async function runDataEngine(
     };
   });
 
-  const factResults = await mapWithConcurrency(factTasks, TABLE_CONCURRENCY);
-  tableResults.push(...factResults);
+  const dimResults = await mapWithConcurrency(dimTasks, DIM_CONCURRENCY);
+  tableResults.push(...dimResults);
+
+  // =======================================================================
+  // Pass 3: Fact Generation (fact/transaction tables -- wave-based)
+  // =======================================================================
+  log.info("Pass 3: Fact generation", {
+    factTables: factTables.length,
+    concurrency: FACT_CONCURRENCY,
+  });
+
+  // Detect fact-to-fact FK dependencies and sort into waves
+  const completedTableNames = new Set(
+    tableResults.filter((r) => r.status === "completed").map((r) => r.name),
+  );
+  const factWaves = buildFactWaves(factTables, completedTableNames);
+
+  log.info("Fact table dependency waves", {
+    waves: factWaves.length,
+    breakdown: factWaves.map((w, i) => ({
+      wave: i,
+      tables: w.map((t) => t.name),
+    })),
+  });
+
+  for (let waveIdx = 0; waveIdx < factWaves.length; waveIdx++) {
+    const wave = factWaves[waveIdx];
+    checkCancelled(signal);
+
+    const wavePercent = 50 + Math.round((waveIdx / factWaves.length) * 35);
+    progress(`Generating fact tables (wave ${waveIdx + 1}/${factWaves.length})...`, wavePercent);
+
+    // Skip tables whose upstream dependencies failed
+    const skippedInWave: TableResult[] = [];
+    const executableInWave: TableDesign[] = [];
+
+    for (const table of wave) {
+      const fkDeps = getFactDependencies(table, factTables);
+      const failedDep = fkDeps.find(
+        (dep) => tableResults.some((r) => r.name === dep && r.status === "failed"),
+      );
+      if (failedDep) {
+        const fqn = `\`${input.catalog}\`.\`${input.schema}\`.\`${table.name}\``;
+        log.warn("Skipping fact table -- upstream dependency failed", {
+          table: table.name,
+          failedDependency: failedDep,
+        });
+        input.onTablePhase?.(table.name, "failed");
+        skippedInWave.push({
+          name: table.name,
+          fqn,
+          rowCount: 0,
+          status: "failed",
+          error: `Skipped: dependency '${failedDep}' failed`,
+          retryCount: 0,
+        });
+      } else {
+        executableInWave.push(table);
+      }
+    }
+
+    tableResults.push(...skippedInWave);
+
+    const waveTasks = executableInWave.map((table: TableDesign) => async (): Promise<TableResult> => {
+      checkCancelled(signal);
+      const t0 = Date.now();
+
+      log.info("Generating fact table", {
+        table: table.name,
+        columns: table.columns.length,
+        rowTarget: table.rowTarget,
+        wave: waveIdx,
+      });
+
+      const onPhase = (phase: TablePhase) => input.onTablePhase?.(table.name, phase);
+      const result = await runFactGeneration(
+        table,
+        input.catalog,
+        input.schema,
+        dimensionTables,
+        narratives,
+        {
+          customerName: input.research.customerName,
+          industryId: input.research.industryId,
+          nomenclature: input.research.nomenclature,
+        },
+        { llm, sql, logger: log, signal, onPhase, reviewAndFixSql: reviewFn },
+      );
+
+      const fqn = `\`${input.catalog}\`.\`${input.schema}\`.\`${table.name}\``;
+      tableFqns.push(fqn);
+
+      log.info(result.error ? "Fact table failed" : "Fact table created", {
+        table: table.name,
+        rowCount: result.rowCount,
+        durationMs: Date.now() - t0,
+        wave: waveIdx,
+        ...(result.error ? { error: result.error } : {}),
+      });
+
+      return {
+        name: table.name,
+        fqn,
+        rowCount: result.rowCount,
+        status: result.error ? "failed" : "completed",
+        error: result.error,
+        retryCount: 0,
+      };
+    });
+
+    const waveResults = await mapWithConcurrency(waveTasks, FACT_CONCURRENCY);
+    tableResults.push(...waveResults);
+    waveResults.forEach((r) => {
+      if (r.status === "completed") completedTableNames.add(r.name);
+    });
+  }
 
   // =======================================================================
   // Pass 4: Validation
   // =======================================================================
+  log.info("Pass 4: Validation", { totalTables: tables.length });
   progress("Validating generated data...", 90);
 
   const validationSummary = await runValidation(
@@ -223,4 +329,48 @@ export async function runDataEngine(
 
 function checkCancelled(signal?: AbortSignal): void {
   if (signal?.aborted) throw new DataEngineCancelledError();
+}
+
+/** Extract fact-table names that a given fact table depends on via FK columns. */
+function getFactDependencies(table: TableDesign, allFactTables: TableDesign[]): string[] {
+  const factNames = new Set(allFactTables.map((f) => f.name));
+  return table.columns
+    .filter((c) => c.role === "fk" && c.fkTarget)
+    .map((c) => c.fkTarget!.split(".")[0])
+    .filter((refTable) => factNames.has(refTable));
+}
+
+/** Topologically sort fact tables into dependency waves. */
+function buildFactWaves(factTables: TableDesign[], completedTableNames: Set<string>): TableDesign[][] {
+  const remaining = [...factTables];
+  const waves: TableDesign[][] = [];
+  const placed = new Set<string>(completedTableNames);
+
+  while (remaining.length > 0) {
+    const wave: TableDesign[] = [];
+    const stillBlocked: TableDesign[] = [];
+
+    for (const table of remaining) {
+      const deps = getFactDependencies(table, factTables);
+      const unmet = deps.filter((d) => !placed.has(d));
+      if (unmet.length === 0) {
+        wave.push(table);
+      } else {
+        stillBlocked.push(table);
+      }
+    }
+
+    if (wave.length === 0) {
+      // Circular dependency or all remaining depend on failed tables -- force them into a final wave
+      waves.push(stillBlocked);
+      break;
+    }
+
+    waves.push(wave);
+    wave.forEach((t) => placed.add(t.name));
+    remaining.length = 0;
+    remaining.push(...stillBlocked);
+  }
+
+  return waves;
 }

@@ -7,7 +7,7 @@
  */
 
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
-import { resolveEndpoint } from "@/lib/dbx/client";
+import { resolveResearchEndpoint } from "../resolve-endpoint";
 import { createOutcomeMap, setCustomEnrichment } from "@/lib/lakebase/outcome-maps";
 import type { LLMClient } from "@/lib/ports/llm-client";
 import type { Logger } from "@/lib/ports/logger";
@@ -61,7 +61,7 @@ export async function runOutcomeMapGeneration(
     .replace("{few_shot_example}", FEW_SHOT_EXAMPLE)
     .replace("{source_context}", sourceContext.slice(0, 20_000) || "(No source material available)");
 
-  const endpoint = resolveEndpoint("reasoning");
+  const endpoint = resolveResearchEndpoint();
 
   log.info("Generating outcome map", { industryId, industryName });
 
@@ -134,7 +134,7 @@ export async function runEnrichmentOnlyGeneration(
     .replace("{outcome_map_json}", JSON.stringify(existingOutcome, null, 2).slice(0, 15_000))
     .replace("{source_context}", sourceContext.slice(0, 15_000) || "(No source material available)");
 
-  const endpoint = resolveEndpoint("generation");
+  const endpoint = resolveResearchEndpoint();
 
   log.info("Generating enrichment only", { industryId, industryName });
 
@@ -142,7 +142,7 @@ export async function runEnrichmentOnlyGeneration(
     endpoint,
     messages: [{ role: "user", content: prompt }],
     temperature: 0.3,
-    maxTokens: 16_384,
+    maxTokens: 32_000,
     responseFormat: "json_object",
     signal,
   });

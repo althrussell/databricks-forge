@@ -7,6 +7,25 @@
 
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 
+/** SQL constraints for demo data generation to avoid Databricks rejection. */
+export const DEMO_DATA_SQL_CONSTRAINTS = `
+# CRITICAL DATABRICKS SQL CONSTRAINTS FOR DATA GENERATION
+- NEVER pass a column or expression as a rand() seed: rand(col) is INVALID.
+  Use rand() with NO arguments for random values.
+  For deterministic bucketing per row, use: hash(col_name) % N
+- NEVER nest explode() inside CAST or any expression.
+  CORRECT:  SELECT explode(sequence(1, N)) AS seq_id
+  WRONG:    SELECT CAST(explode(sequence(1, N)) AS BIGINT)
+- NEVER use INTERVAL with CAST or expressions.
+  WRONG:    + INTERVAL CAST(expr AS INT) HOURS
+  CORRECT:  + make_interval(0, 0, 0, 0, CAST(expr AS INT), 0, 0)
+  CORRECT:  + (CAST(expr AS INT) * INTERVAL '1' HOUR)
+- For CTAS: use a SINGLE CREATE OR REPLACE TABLE ... AS SELECT statement.
+  NEVER follow with INSERT INTO -- all data must come from the SELECT.
+- Use fully qualified backtick-quoted names: \`catalog\`.\`schema\`.\`table\`
+- Fact tables MUST ONLY reference dimension tables, never other fact tables.
+`;
+
 // ---------------------------------------------------------------------------
 // Pass 0: Narrative Design
 // ---------------------------------------------------------------------------
@@ -89,6 +108,7 @@ Design a complete relational schema that:
 - Every table needs a primary key column
 - FK columns must match the PK type of the referenced dimension
 - Include useful metadata columns: created_at TIMESTAMP, updated_at TIMESTAMP
+- Fact tables MUST NOT have FK references to other fact tables. Only reference dimension tables.
 
 # OUTPUT FORMAT
 Return JSON:
@@ -128,12 +148,11 @@ Nomenclature: {nomenclature}
 
 # DATABRICKS SQL RULES
 ${DATABRICKS_SQL_RULES_COMPACT}
+${DEMO_DATA_SQL_CONSTRAINTS}
 
 # TASK
-Generate two SQL statements:
-
-1. CREATE TABLE with the exact column definitions
-2. INSERT INTO with {row_target} realistic rows
+Generate a single CREATE OR REPLACE TABLE AS SELECT statement with {row_target} rows of realistic data.
+Use EXPLODE(SEQUENCE(1, {row_target})) to generate the row set, just like fact tables.
 
 Requirements:
 - Values must be realistic for {customer_name}'s industry and division
@@ -143,7 +162,7 @@ Requirements:
 - Non-uniform distributions (80/20 for categories, realistic geographic spread)
 - No placeholder or Lorem Ipsum text
 
-Return ONLY the two SQL statements separated by a semicolon. No markdown, no explanation.`;
+Return ONLY the SQL statement. No markdown, no explanation.`;
 
 // ---------------------------------------------------------------------------
 // Pass 3: Fact SQL Generation (per fact table)
@@ -170,14 +189,15 @@ Nomenclature: {nomenclature}
 
 # DATABRICKS SQL RULES
 ${DATABRICKS_SQL_RULES_COMPACT}
+${DEMO_DATA_SQL_CONSTRAINTS}
 
 # TASK
-Generate a single CREATE TABLE AS SELECT statement that:
+Generate a single CREATE OR REPLACE TABLE AS SELECT statement. Use CTAS only -- NEVER CREATE TABLE + INSERT INTO.
 
-1. Uses EXPLODE(SEQUENCE(1, {row_target})) to generate the row set
-2. References dimension tables for FK values using element_at + COLLECT_LIST
+1. Uses EXPLODE(SEQUENCE(1, {row_target})) to generate the row set (never nest explode in CAST)
+2. References dimension tables ONLY for FK values using element_at + COLLECT_LIST (never reference other fact tables)
 3. Creates non-uniform distributions:
-   - CASE WHEN RAND() < 0.3 THEN 'X' for weighted categories
+   - CASE WHEN RAND() < 0.3 THEN 'X' for weighted categories (RAND() with no seed)
    - RAND() * range + offset for numeric measures
    - DATE_ADD(CURRENT_DATE(), -CAST(RAND()*{date_range} AS INT)) for dates
 4. Embeds the narrative patterns:

@@ -6,7 +6,7 @@
  */
 
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
-import { resolveEndpoint } from "@/lib/dbx/client";
+import { resolveResearchEndpoint } from "../resolve-endpoint";
 import type { LLMClient } from "@/lib/ports/llm-client";
 import type { Logger } from "@/lib/ports/logger";
 import type { DemoScope } from "../../types";
@@ -56,7 +56,7 @@ export async function runStrategyAndNarrative(
     .replace("{data_assets_context}", dataAssetsContext.slice(0, 6_000))
     .replace("{source_text}", sourceText.slice(0, 10_000));
 
-  const endpoint = resolveEndpoint("reasoning");
+  const endpoint = resolveResearchEndpoint();
 
   const response = await llm.chat({
     endpoint,

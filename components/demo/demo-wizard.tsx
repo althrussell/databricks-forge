@@ -46,6 +46,7 @@ interface DemoWizardProps {
 export function DemoWizard({ open, onOpenChange }: DemoWizardProps) {
   const [step, setStep] = useState<WizardStep>("company-info");
   const [sessionId, setSessionId] = useState<string>("");
+  const [retryCount, setRetryCount] = useState(0);
 
   // Step 1 state
   const [customerName, setCustomerName] = useState("");
@@ -116,6 +117,15 @@ export function DemoWizard({ open, onOpenChange }: DemoWizardProps) {
     }
   }, [sessionId, catalog, schema, catalogCreated]);
 
+  const handleRetryFailedTables = useCallback(
+    async (_failedTables: string[]) => {
+      setRetryCount((c) => c + 1);
+      // Re-trigger generation; backend will restart the job for the same session
+      await handleStartGeneration();
+    },
+    [handleStartGeneration],
+  );
+
   const handleClose = () => {
     onOpenChange(false);
     // Reset state after close animation
@@ -133,6 +143,7 @@ export function DemoWizard({ open, onOpenChange }: DemoWizardProps) {
       setCatalog("");
       setSchema("");
       setCatalogCreated(false);
+      setRetryCount(0);
     }, 300);
   };
 
@@ -214,7 +225,12 @@ export function DemoWizard({ open, onOpenChange }: DemoWizardProps) {
           )}
 
           {step === "progress" && (
-            <GenerationProgressStep sessionId={sessionId} />
+            <GenerationProgressStep
+              key={retryCount}
+              sessionId={sessionId}
+              onComplete={() => setStep("complete")}
+              onRetryNeeded={handleRetryFailedTables}
+            />
           )}
 
           {step === "complete" && (

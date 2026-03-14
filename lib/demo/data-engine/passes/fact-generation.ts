@@ -7,7 +7,7 @@
  */
 
 import { resolveEndpoint } from "@/lib/dbx/client";
-import { buildTableCommentDDL, buildColumnCommentDDL } from "@/lib/ai/comment-applier";
+import { buildTableCommentDDL, buildBatchColumnCommentDDL } from "@/lib/ai/comment-applier";
 import type { LLMClient } from "@/lib/ports/llm-client";
 import type { SqlExecutor } from "@/lib/ports/sql-executor";
 import type { Logger } from "@/lib/ports/logger";
@@ -93,7 +93,18 @@ export async function runFactGeneration(
       onPhase?.("retrying");
       retries++;
 
-      if (reviewAndFixSql) {
+      if (error.includes("TABLE_OR_VIEW_NOT_FOUND")) {
+        log.info("Re-generating SQL from scratch due to missing table", { table: table.name });
+        const retryResponse = await llm.chat({
+          endpoint,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.2,
+          maxTokens: 16_384,
+          signal,
+        });
+        currentSql = retryResponse.content.trim();
+        currentSql = currentSql.replace(/^```(?:sql)?\n?/i, "").replace(/\n?```$/i, "");
+      } else if (reviewAndFixSql) {
         currentSql = await reviewAndFixSql(currentSql, error, `Fact table: ${table.name}`);
       }
     }
@@ -102,18 +113,8 @@ export async function runFactGeneration(
   // Apply table and column comments
   await applyComments(table, catalog, schema, sql, log);
 
-  // Verify row count
-  try {
-    const countResult = await sql.executeScalar<string>(
-      `SELECT COUNT(*) FROM \`${catalog}\`.\`${schema}\`.\`${table.name}\``,
-    );
-    const rowCount = parseInt(countResult ?? "0", 10);
-    onPhase?.("completed");
-    return { rowCount };
-  } catch {
-    onPhase?.("completed");
-    return { rowCount: table.rowTarget };
-  }
+  onPhase?.("completed");
+  return { rowCount: table.rowTarget };
 }
 
 async function applyComments(
@@ -128,10 +129,11 @@ async function applyComments(
     if (table.description) {
       await sql.execute(buildTableCommentDDL(fqn, table.description));
     }
-    for (const col of table.columns) {
-      if (col.description) {
-        await sql.execute(buildColumnCommentDDL(fqn, col.name, col.description));
-      }
+    const columnsWithComments = table.columns
+      .filter((c) => c.description)
+      .map((c) => ({ columnName: c.name, comment: c.description }));
+    if (columnsWithComments.length > 0) {
+      await sql.execute(buildBatchColumnCommentDDL(fqn, columnsWithComments));
     }
   } catch (err) {
     log.warn("Failed to apply comments (non-fatal)", {
