@@ -1,6 +1,6 @@
 # Release Notes -- 2026-03-14
 
-**Databricks Forge v0.32.0 → v0.37.0**
+**Databricks Forge v0.32.0 → v0.37.1**
 
 ---
 
@@ -405,6 +405,33 @@ focused components. Desktop layout uses max-w-[1440px] with main content +
 
 ---
 
+## v0.37.1 -- SEC EDGAR False Match Fix
+
+### Bug Fixes
+
+- **SEC EDGAR matches wrong company for non-US domains** -- The Research Engine's
+  SEC EDGAR fallback used an overly loose name-matching algorithm that checked if
+  the domain name *contained* the first word of any SEC title. For companies like
+  "O REILLY AUTOMOTIVE INC", the first word is `"o"` -- a single character that
+  matches virtually any domain. An Australian company's website was incorrectly
+  matched to O'Reilly Automotive (CIK 0000898173), injecting a completely
+  unrelated 10-K filing into the research context.
+
+  Three fixes applied:
+  1. **Country-code TLD guard** -- `isNonUsDomain()` detects `.com.au`, `.co.uk`,
+     `.de`, and 40+ other ccTLDs and skips SEC EDGAR entirely for non-US domains.
+  2. **Scored prefix matching** -- Replaced the naive `.includes()` with
+     `findBestEdgarMatch()` that normalizes both names (stripping spaces and
+     punctuation), requires prefix alignment, scores candidates by overlap ratio,
+     and rejects matches below 40% similarity.
+  3. **Exact ticker match priority** -- Ticker symbols are checked first as the
+     highest-confidence match before falling back to name comparison.
+
+- **Dead EDGAR search API calls** -- Removed two unused `efts.sec.gov` search
+  index fetches that were executed but whose responses were never consumed.
+
+---
+
 ## All Commits
 
 | Hash | Summary |
@@ -423,4 +450,5 @@ focused components. Desktop layout uses max-w-[1440px] with main content +
 | *(pending)* | chore: rename Demo Sessions to Demo Studio across UI |
 | *(pending)* | chore: consolidate release notes into single files per day |
 | `7c546aa` | fix: persist demo session catalog/schema so Launch Discovery works |
+| *(pending)* | fix: SEC EDGAR false match for non-US domains -- ccTLD guard, scored matching, dead code cleanup |
 | `c4ce20d` | fix: update mkdocs nav to consolidated release notes |
