@@ -1,6 +1,6 @@
 # Release Notes -- 2026-03-14
 
-**Databricks Forge v0.32.0 → v0.36.2**
+**Databricks Forge v0.32.0 → v0.36.3**
 
 ---
 
@@ -338,6 +338,24 @@ suffix files.
 
 ---
 
+## v0.36.3 -- Demo Session Launch Fix
+
+### Bug Fixes
+
+- **Demo session catalog/schema not persisted** -- The demo session was created
+  with empty `catalogName` and `schemaName` during the research step, and the
+  generate route never wrote them back to the database. Launching Discovery or
+  Estate Scan from the session detail page produced UC metadata scope `.` (empty),
+  failing immediately at metadata extraction. The generate route now persists
+  `catalogName` and `schemaName` when transitioning the session to "generating".
+- **"View full research briefing" opens in same window** -- The link in the
+  wizard completion step now opens the session detail page in a new browser tab
+  instead of navigating away from the wizard via `router.push`.
+- **mkdocs nav stale release note references** -- Removed deleted suffix release
+  note files from `mkdocs.yml` navigation that were causing 404s on the docs site.
+
+---
+
 ## All Commits
 
 | Hash | Summary |
@@ -355,3 +373,5 @@ suffix files.
 | *(pending)* | feat: build mode selector + fix Genie Studio card visibility/title/deploy status |
 | *(pending)* | chore: rename Demo Sessions to Demo Studio across UI |
 | *(pending)* | chore: consolidate release notes into single files per day |
+| `7c546aa` | fix: persist demo session catalog/schema so Launch Discovery works |
+| `c4ce20d` | fix: update mkdocs nav to consolidated release notes |
