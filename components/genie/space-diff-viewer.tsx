@@ -7,8 +7,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import {
   ChevronDown,
   ChevronRight,
+  Columns3,
   FileCheck,
   Minus,
+  Pencil,
   Plus,
   Table2,
   MessageSquare,
@@ -73,6 +75,76 @@ function diffByKey<T>(oldItems: T[], newItems: T[], keyFn: (item: T) => string):
 }
 
 // ---------------------------------------------------------------------------
+// Column config diff (detects changes within existing tables)
+// ---------------------------------------------------------------------------
+
+interface ColumnConfigChange {
+  tableName: string;
+  columnName: string;
+  status: "added" | "removed" | "modified";
+  detail?: string;
+}
+
+function colConfigKey(c: Record<string, unknown>): string {
+  return String(c.column_name ?? c.name ?? "");
+}
+
+function diffColumnConfigs(
+  oldSpace: SerializedSpace,
+  newSpace: SerializedSpace,
+): ColumnConfigChange[] {
+  const changes: ColumnConfigChange[] = [];
+  const oldTableMap = new Map((oldSpace.data_sources?.tables ?? []).map((t) => [t.identifier, t]));
+  for (const newTable of newSpace.data_sources?.tables ?? []) {
+    const oldTable = oldTableMap.get(newTable.identifier);
+    if (!oldTable) continue;
+    const oldCols = new Map(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ((oldTable.column_configs ?? []) as any[]).map((c: Record<string, unknown>) => [
+        colConfigKey(c),
+        c,
+      ]),
+    );
+    const newCols = new Map(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ((newTable.column_configs ?? []) as any[]).map((c: Record<string, unknown>) => [
+        colConfigKey(c),
+        c,
+      ]),
+    );
+    for (const [name, newCol] of newCols) {
+      if (!name) continue;
+      const oldCol = oldCols.get(name);
+      if (!oldCol) {
+        changes.push({
+          tableName: newTable.identifier,
+          columnName: name,
+          status: "added",
+          detail: String(newCol.description ?? ""),
+        });
+      } else if (JSON.stringify(oldCol) !== JSON.stringify(newCol)) {
+        changes.push({
+          tableName: newTable.identifier,
+          columnName: name,
+          status: "modified",
+          detail: String(newCol.description ?? ""),
+        });
+      }
+    }
+    for (const [name] of oldCols) {
+      if (name && !newCols.has(name)) {
+        changes.push({
+          tableName: newTable.identifier,
+          columnName: name,
+          status: "removed",
+        });
+      }
+    }
+  }
+  return changes;
+}
+
+// ---------------------------------------------------------------------------
 // Section components
 // ---------------------------------------------------------------------------
 
@@ -81,6 +153,7 @@ function DiffSection({
   title,
   addedCount,
   removedCount,
+  modifiedCount = 0,
   children,
   defaultOpen = false,
 }: {
@@ -88,11 +161,12 @@ function DiffSection({
   title: string;
   addedCount: number;
   removedCount: number;
+  modifiedCount?: number;
   children: React.ReactNode;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const hasChanges = addedCount > 0 || removedCount > 0;
+  const hasChanges = addedCount > 0 || removedCount > 0 || modifiedCount > 0;
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -108,6 +182,12 @@ function DiffSection({
               <span className="flex items-center gap-0.5 text-green-600">
                 <Plus className="size-3" />
                 {addedCount}
+              </span>
+            )}
+            {modifiedCount > 0 && (
+              <span className="flex items-center gap-0.5 text-amber-600">
+                <Pencil className="size-3" />
+                {modifiedCount}
               </span>
             )}
             {removedCount > 0 && (
@@ -132,7 +212,7 @@ function ItemRow({
   detail,
 }: {
   label: string;
-  status: "added" | "removed" | "unchanged";
+  status: "added" | "removed" | "modified" | "unchanged";
   detail?: string;
 }) {
   const bg =
@@ -140,13 +220,16 @@ function ItemRow({
       ? "bg-green-50 dark:bg-green-900/15 border-green-200 dark:border-green-800"
       : status === "removed"
         ? "bg-red-50 dark:bg-red-900/15 border-red-200 dark:border-red-800"
-        : "bg-transparent border-transparent";
+        : status === "modified"
+          ? "bg-amber-50 dark:bg-amber-900/15 border-amber-200 dark:border-amber-800"
+          : "bg-transparent border-transparent";
 
   return (
     <div className={`rounded border px-2 py-1 text-xs ${bg}`}>
       <div className="flex items-center gap-1.5">
         {status === "added" && <Plus className="size-3 text-green-600" />}
         {status === "removed" && <Minus className="size-3 text-red-600" />}
+        {status === "modified" && <Pencil className="size-3 text-amber-600" />}
         <span className="font-medium">{label}</span>
       </div>
       {detail && <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{detail}</p>}
@@ -242,6 +325,15 @@ export function SpaceDiffViewer({
     return diffByKey(oldQ, newQ, (q) => flattenStringArray(q.question));
   }, [canStructure, oldSpace, newSpace]);
 
+  const colConfigChanges = useMemo(() => {
+    if (!canStructure) return [];
+    return diffColumnConfigs(oldSpace, newSpace);
+  }, [canStructure, oldSpace, newSpace]);
+
+  const colConfigAdded = colConfigChanges.filter((c) => c.status === "added").length;
+  const colConfigModified = colConfigChanges.filter((c) => c.status === "modified").length;
+  const colConfigRemoved = colConfigChanges.filter((c) => c.status === "removed").length;
+
   const totalAdded =
     (tableDiff?.added.length ?? 0) +
     (questionDiff?.added.length ?? 0) +
@@ -250,7 +342,8 @@ export function SpaceDiffViewer({
     (filterDiff?.added.length ?? 0) +
     (exprDiff?.added.length ?? 0) +
     (benchmarkDiff?.added.length ?? 0) +
-    (exampleSqlDiff?.added.length ?? 0);
+    (exampleSqlDiff?.added.length ?? 0) +
+    colConfigAdded;
   const totalRemoved =
     (tableDiff?.removed.length ?? 0) +
     (questionDiff?.removed.length ?? 0) +
@@ -259,9 +352,11 @@ export function SpaceDiffViewer({
     (filterDiff?.removed.length ?? 0) +
     (exprDiff?.removed.length ?? 0) +
     (benchmarkDiff?.removed.length ?? 0) +
-    (exampleSqlDiff?.removed.length ?? 0);
+    (exampleSqlDiff?.removed.length ?? 0) +
+    colConfigRemoved;
+  const totalModified = colConfigModified;
 
-  const noDiff = totalAdded === 0 && totalRemoved === 0 && canStructure;
+  const noDiff = totalAdded === 0 && totalRemoved === 0 && totalModified === 0 && canStructure;
 
   if (noDiff) {
     return (
@@ -318,6 +413,12 @@ export function SpaceDiffViewer({
             {totalAdded} item{totalAdded !== 1 ? "s" : ""} added
           </span>
         )}
+        {totalModified > 0 && (
+          <span className="flex items-center gap-1 text-amber-600">
+            <Pencil className="size-3" />
+            {totalModified} item{totalModified !== 1 ? "s" : ""} modified
+          </span>
+        )}
         {totalRemoved > 0 && (
           <span className="flex items-center gap-1 text-red-600">
             <Minus className="size-3" />
@@ -356,6 +457,29 @@ export function SpaceDiffViewer({
                       {tableDiff.unchanged} table{tableDiff.unchanged !== 1 ? "s" : ""} unchanged
                     </p>
                   )}
+                </div>
+              </DiffSection>
+            )}
+
+            {/* Column Configurations */}
+            {colConfigChanges.length > 0 && (
+              <DiffSection
+                icon={<Columns3 className="size-3.5 text-indigo-500" />}
+                title={`Column Configs (${colConfigAdded + colConfigModified + colConfigRemoved} changes)`}
+                addedCount={colConfigAdded}
+                modifiedCount={colConfigModified}
+                removedCount={colConfigRemoved}
+                defaultOpen
+              >
+                <div className="space-y-1">
+                  {colConfigChanges.map((c, i) => (
+                    <ItemRow
+                      key={i}
+                      label={`${tableName(c.tableName)}.${c.columnName}`}
+                      status={c.status}
+                      detail={c.detail || undefined}
+                    />
+                  ))}
                 </div>
               </DiffSection>
             )}
