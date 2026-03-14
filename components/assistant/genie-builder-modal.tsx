@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -31,27 +31,19 @@ interface GenieBuilderModalProps {
 }
 
 // ---------------------------------------------------------------------------
-// Component
+// Inner content -- remounts each time the dialog opens, resetting state
 // ---------------------------------------------------------------------------
 
-export function GenieBuilderModal({
-  open,
+function GenieBuilderContent({
   onOpenChange,
   tables,
   domain,
   conversationSummary,
   onBuildStarted,
-}: GenieBuilderModalProps) {
+}: Omit<GenieBuilderModalProps, "open" | "tableEnrichments" | "sqlBlocks">) {
   const [startError, setStartError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const { startBuild } = useGenieBuild();
-
-  useEffect(() => {
-    if (open) {
-      setStartError(null);
-      setStarting(false);
-    }
-  }, [open]);
 
   const buildConfig = useCallback(
     (mode: "fast" | "full") => {
@@ -97,38 +89,63 @@ export function GenieBuilderModal({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-2xl flex flex-col overflow-hidden">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="size-5 text-primary" />
-            Create Genie Space
-          </DialogTitle>
-          <DialogDescription>
-            Choose a build mode to generate your Genie Space. Progress will appear in a toast so you
-            can continue your conversation.
-          </DialogDescription>
-        </DialogHeader>
+    <DialogContent className="max-h-[85vh] max-w-2xl flex flex-col overflow-hidden">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <Sparkles className="size-5 text-primary" />
+          Create Genie Space
+        </DialogTitle>
+        <DialogDescription>
+          Choose a build mode to generate your Genie Space. Progress will appear in a toast so you
+          can continue your conversation.
+        </DialogDescription>
+      </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="py-4">
-            <BuildModeSelector
-              onSelect={handleModeSelect}
-              tableCount={tables.length}
-              disabled={starting}
-            />
-          </div>
-
-          {startError && (
-            <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-destructive">
-                <AlertTriangle className="size-4" />
-                {startError}
-              </div>
-            </div>
-          )}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="py-4">
+          <BuildModeSelector
+            onSelect={handleModeSelect}
+            tableCount={tables.length}
+            disabled={starting}
+          />
         </div>
-      </DialogContent>
+
+        {startError && (
+          <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-destructive">
+              <AlertTriangle className="size-4" />
+              {startError}
+            </div>
+          </div>
+        )}
+      </div>
+    </DialogContent>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Exported wrapper -- conditionally mounts content when open
+// ---------------------------------------------------------------------------
+
+export function GenieBuilderModal({
+  open,
+  onOpenChange,
+  tables,
+  domain,
+  conversationSummary,
+  onBuildStarted,
+}: GenieBuilderModalProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open && (
+        <GenieBuilderContent
+          onOpenChange={onOpenChange}
+          tables={tables}
+          domain={domain}
+          conversationSummary={conversationSummary}
+          onBuildStarted={onBuildStarted}
+        />
+      )}
     </Dialog>
   );
 }
