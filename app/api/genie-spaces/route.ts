@@ -307,14 +307,22 @@ async function runDeploy(
     params.authMode,
   );
 
-  // Step 5: Add to listing cache so the space appears immediately
-  await upsertCachedSpaces([
-    {
+  // Step 5: Best-effort listing cache update -- space is already live,
+  // so a transient cache failure must not flip the deploy job to failed.
+  try {
+    await upsertCachedSpaces([
+      {
+        spaceId: result.space_id,
+        title: params.title,
+        description: params.description ?? null,
+      },
+    ]);
+  } catch (cacheErr) {
+    logger.warn("Cache upsert failed after successful deploy; space will appear on next sync", {
       spaceId: result.space_id,
-      title: params.title,
-      description: params.description ?? null,
-    },
-  ]);
+      error: safeErrorMessage(cacheErr),
+    });
+  }
 
   logger.info("Genie space created successfully", {
     spaceId: result.space_id,
