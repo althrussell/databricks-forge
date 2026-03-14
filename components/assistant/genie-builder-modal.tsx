@@ -1,52 +1,23 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
-import {
-  Loader2,
-  Rocket,
-  Sparkles,
-  Check,
-  ExternalLink,
-  Table2,
-  BarChart3,
-  Link2,
-  MessageSquare,
-  FileText,
-  AlertTriangle,
-  RefreshCw,
-  ChevronDown,
-  ChevronRight,
-  Zap,
-} from "lucide-react";
-import type {
-  GenieSpaceRecommendation,
-  SerializedSpace,
-  MetricViewProposal,
-} from "@/lib/genie/types";
+import { Sparkles, AlertTriangle } from "lucide-react";
 import { loadSettings } from "@/lib/settings";
-import { parseErrorResponse, safeJsonParse } from "@/lib/error-utils";
 import { BuildModeSelector, type BuildMode } from "@/components/genie/build-mode-selector";
+import { useGenieBuild } from "@/components/providers/genie-build-provider";
+import { showBuildToast } from "./genie-build-toast";
 import type { TableEnrichmentData } from "./ask-forge-chat";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-type Phase = "choose" | "generating" | "ready" | "deploying" | "deployed" | "error";
 
 interface GenieBuilderModalProps {
   open: boolean;
@@ -56,97 +27,23 @@ interface GenieBuilderModalProps {
   conversationSummary?: string;
   tableEnrichments?: TableEnrichmentData[];
   sqlBlocks?: string[];
-}
-
-function extractDefaultSchema(tables: string[]): string {
-  if (tables.length === 0) return "";
-  const parts = tables[0].split(".");
-  if (parts.length >= 2) return `${parts[0]}.${parts[1]}`;
-  return "";
-}
-
-function parseMetricViewProposals(rec: GenieSpaceRecommendation): MetricViewProposal[] {
-  const raw = rec as unknown as Record<string, unknown>;
-  if (typeof raw.metricViewProposals !== "string") return [];
-  try {
-    return JSON.parse(raw.metricViewProposals) as MetricViewProposal[];
-  } catch {
-    return [];
-  }
+  onBuildStarted?: (jobId: string) => void;
 }
 
 // ---------------------------------------------------------------------------
-// Component
+// Inner content -- remounts each time the dialog opens, resetting state
 // ---------------------------------------------------------------------------
 
-export function GenieBuilderModal({
-  open,
+function GenieBuilderContent({
   onOpenChange,
   tables,
   domain,
   conversationSummary,
-}: GenieBuilderModalProps) {
-  const [phase, setPhase] = useState<Phase>("choose");
-  const [genMessage, setGenMessage] = useState("Building space from metadata...");
-  const [genPercent, setGenPercent] = useState(0);
-  const [genError, setGenError] = useState<string | null>(null);
-  const [generateJobId, setGenerateJobId] = useState<string | null>(null);
-
-  const [recommendation, setRecommendation] = useState<GenieSpaceRecommendation | null>(null);
-  const [parsedSpace, setParsedSpace] = useState<SerializedSpace | null>(null);
-  const [resultMode, setResultMode] = useState<"fast" | "full">("fast");
-
-  const [targetSchema, setTargetSchema] = useState<string[]>([]);
-  const [showDetails, setShowDetails] = useState(false);
-  const [showSchemaSelector, setShowSchemaSelector] = useState(false);
-
-  const [deployedSpaceId, setDeployedSpaceId] = useState<string | null>(null);
-  const [databricksHost, setDatabricksHost] = useState("");
-  const [metricViewsServerEnabled, setMetricViewsServerEnabled] = useState(false);
-
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const mvProposals = useMemo(
-    () => (recommendation ? parseMetricViewProposals(recommendation) : []),
-    [recommendation],
-  );
-  const hasMetricViews = mvProposals.filter((m) => m.validationStatus !== "error").length > 0;
-
-  const defaultSchema = useMemo(() => extractDefaultSchema(tables), [tables]);
-
-  // Fetch host for external links
-  useEffect(() => {
-    fetch("/api/health")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.host) setDatabricksHost(d.host.replace(/\/$/, ""));
-        if (d.metricViewsEnabled) setMetricViewsServerEnabled(true);
-      })
-      .catch(() => {});
-  }, []);
-
-  // Reset state when modal opens
-  useEffect(() => {
-    if (open) {
-      setPhase("choose");
-      setGenMessage("Building space from metadata...");
-      setGenPercent(0);
-      setGenError(null);
-      setRecommendation(null);
-      setParsedSpace(null);
-      setResultMode("fast");
-      setTargetSchema(defaultSchema ? [defaultSchema] : []);
-      setShowDetails(false);
-      setShowSchemaSelector(false);
-      setDeployedSpaceId(null);
-      setGenerateJobId(null);
-    } else {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    }
-  }, [open, defaultSchema]);
+  onBuildStarted,
+}: Omit<GenieBuilderModalProps, "open" | "tableEnrichments" | "sqlBlocks">) {
+  const [startError, setStartError] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
+  const { startBuild } = useGenieBuild();
 
   const buildConfig = useCallback(
     (mode: "fast" | "full") => {
@@ -171,624 +68,84 @@ export function GenieBuilderModal({
     [domain, conversationSummary],
   );
 
-  const handleGenerationResult = useCallback(
-    (rec: GenieSpaceRecommendation, mode: "fast" | "full") => {
-      setRecommendation(rec);
-      setResultMode(mode);
-      try {
-        setParsedSpace(JSON.parse(rec.serializedSpace));
-      } catch {
-        /* ignore */
-      }
-      setPhase("ready");
-    },
-    [],
-  );
-
-  const fastProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const runFastGeneration = useCallback(async () => {
-    setPhase("generating");
-    setGenMessage("Analyzing table metadata and generating space configuration...");
-    setGenPercent(10);
-    setGenError(null);
-
-    let tick = 10;
-    if (fastProgressRef.current) clearInterval(fastProgressRef.current);
-    fastProgressRef.current = setInterval(() => {
-      tick = Math.min(tick + Math.random() * 8, 90);
-      setGenPercent(Math.round(tick));
-    }, 800);
-
-    try {
-      const res = await fetch("/api/genie-spaces/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tables, config: buildConfig("fast") }),
-      });
-      if (fastProgressRef.current) clearInterval(fastProgressRef.current);
-      setGenPercent(100);
-      if (!res.ok) {
-        throw new Error(await parseErrorResponse(res, "Failed to generate"));
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data: any = await safeJsonParse(res);
-      if (!data) throw new Error("Invalid response from server");
-      if (data.jobId) setGenerateJobId(data.jobId);
-      if (data.status === "completed" && data.result) {
-        handleGenerationResult(data.result.recommendation, "fast");
-      } else {
-        throw new Error(data.error || "Unexpected response");
-      }
-    } catch (err) {
-      if (fastProgressRef.current) clearInterval(fastProgressRef.current);
-      setGenError(err instanceof Error ? err.message : "Unknown error");
-      setPhase("error");
-    }
-  }, [tables, buildConfig, handleGenerationResult]);
-
-  const runFullGeneration = useCallback(async () => {
-    setPhase("generating");
-    setGenMessage("Starting full Genie Engine...");
-    setGenPercent(0);
-    setGenError(null);
-
-    try {
-      const res = await fetch("/api/genie-spaces/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tables, config: buildConfig("full") }),
-      });
-      if (!res.ok) {
-        throw new Error(await parseErrorResponse(res, "Failed to start generation"));
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const startData: any = await safeJsonParse(res);
-      if (!startData) throw new Error("Invalid response from server");
-      const { jobId } = startData;
-      if (jobId) setGenerateJobId(jobId);
-
-      pollRef.current = setInterval(async () => {
-        try {
-          const pollRes = await fetch(`/api/genie-spaces/generate?jobId=${jobId}`);
-          if (!pollRes.ok) return;
-          const data = await pollRes.json();
-          setGenMessage(data.message ?? "");
-          setGenPercent(data.percent ?? 0);
-
-          if (data.status === "completed" && data.result) {
-            clearInterval(pollRef.current!);
-            pollRef.current = null;
-            handleGenerationResult(data.result.recommendation, "full");
-          } else if (data.status === "failed") {
-            clearInterval(pollRef.current!);
-            pollRef.current = null;
-            setGenError(data.error ?? "Generation failed");
-            setPhase("error");
-          }
-        } catch {
-          /* polling error, retry */
-        }
-      }, 2000);
-    } catch (err) {
-      setGenError(err instanceof Error ? err.message : "Unknown error");
-      setPhase("error");
-    }
-  }, [tables, buildConfig, handleGenerationResult]);
-
   const handleModeSelect = useCallback(
-    (mode: BuildMode) => {
-      if (mode === "fast") {
-        runFastGeneration();
-      } else {
-        runFullGeneration();
+    async (mode: BuildMode) => {
+      setStarting(true);
+      setStartError(null);
+      const engineMode = mode === "fast" ? "fast" : "full";
+      const jobId = await startBuild(tables, buildConfig(engineMode), "ask-forge");
+      if (!jobId) {
+        setStarting(false);
+        setStartError("Failed to start build. Please try again.");
+        return;
       }
-    },
-    [runFastGeneration, runFullGeneration],
-  );
-
-  useEffect(() => {
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-      if (fastProgressRef.current) clearInterval(fastProgressRef.current);
-    };
-  }, []);
-
-  const handleSchemaChange = useCallback(
-    (sources: string[], _excluded?: string[], _patterns?: string[]) => {
-      if (sources.length > 1) {
-        setTargetSchema([sources[sources.length - 1]]);
-      } else {
-        setTargetSchema(sources);
-      }
-    },
-    [],
-  );
-
-  const deployPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (deployPollRef.current) clearInterval(deployPollRef.current);
-    };
-  }, []);
-
-  const handleDeploy = async () => {
-    if (!recommendation) return;
-    if (
-      recommendation.quality?.gateDecision === "warn" &&
-      !window.confirm("This space has quality warnings. Deploy anyway?")
-    )
-      return;
-    setPhase("deploying");
-
-    try {
-      const settings = loadSettings();
-      const deployTitle = recommendation.title;
-
-      const mvPayload =
-        hasMetricViews && targetSchema.length > 0
-          ? mvProposals
-              .filter((m) => m.validationStatus !== "error")
-              .map((m) => ({ name: m.name, ddl: m.ddl, description: m.description }))
-          : [];
-
-      const res = await fetch("/api/genie-spaces", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: deployTitle,
-          description: recommendation.description,
-          serializedSpace: recommendation.serializedSpace,
-          domain: recommendation.domain,
-          quality: recommendation.quality,
-          authMode: settings.genieDeployAuthMode,
-          targetSchema: targetSchema[0] || defaultSchema || undefined,
-          metricViews: mvPayload.length > 0 ? mvPayload : undefined,
-          resourcePrefix: settings.catalogResourcePrefix,
-        }),
+      onOpenChange(false);
+      onBuildStarted?.(jobId);
+      showBuildToast(jobId, () => {
+        /* deploy handled via toast's built-in Studio button */
       });
-
-      if (!res.ok) {
-        throw new Error(await parseErrorResponse(res, "Deployment failed"));
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data: any = await safeJsonParse(res);
-      if (!data) throw new Error("Invalid response from server");
-
-      if (data.jobId) {
-        deployPollRef.current = setInterval(async () => {
-          try {
-            const pollRes = await fetch(`/api/genie-spaces?deployJobId=${data.jobId}`);
-            if (!pollRes.ok) return;
-            const pollData = await pollRes.json();
-            if (pollData.status === "completed" && pollData.result) {
-              if (deployPollRef.current) clearInterval(deployPollRef.current);
-              setDeployedSpaceId(pollData.result.spaceId);
-              setPhase("deployed");
-              fetch("/api/embeddings/backfill", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ scope: "genie" }),
-              }).catch(() => {});
-              if (generateJobId) {
-                fetch("/api/genie-spaces/generate", {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    jobId: generateJobId,
-                    deployedSpaceId: pollData.result.spaceId,
-                  }),
-                }).catch(() => {});
-              }
-            } else if (pollData.status === "failed") {
-              if (deployPollRef.current) clearInterval(deployPollRef.current);
-              setGenError(pollData.error || "Deployment failed");
-              setPhase("error");
-            }
-          } catch {
-            /* retry on next poll */
-          }
-        }, 2000);
-      } else if (data.spaceId) {
-        setDeployedSpaceId(data.spaceId);
-        setPhase("deployed");
-        fetch("/api/embeddings/backfill", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scope: "genie" }),
-        }).catch(() => {});
-        if (generateJobId) {
-          fetch("/api/genie-spaces/generate", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ jobId: generateJobId, deployedSpaceId: data.spaceId }),
-          }).catch(() => {});
-        }
-      }
-    } catch (err) {
-      setGenError(err instanceof Error ? err.message : "Deployment failed");
-      setPhase("error");
-    }
-  };
+    },
+    [tables, buildConfig, startBuild, onOpenChange, onBuildStarted],
+  );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-2xl flex flex-col overflow-hidden">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="size-5 text-primary" />
-            {phase === "deployed"
-              ? "Genie Space Deployed"
-              : phase === "deploying"
-                ? "Deploying..."
-                : "Create Genie Space"}
-          </DialogTitle>
-          <DialogDescription>
-            {phase === "choose"
-              ? "Choose a build mode to generate your Genie Space."
-              : phase === "generating"
-                ? `Building from ${tables.length} table${tables.length !== 1 ? "s" : ""}...`
-                : phase === "ready"
-                  ? "Review your space and deploy to Databricks."
-                  : phase === "deploying"
-                    ? "Creating your Genie Space in Databricks..."
-                    : phase === "deployed"
-                      ? "Your Genie Space is live and ready for queries."
-                      : "Something went wrong."}
-          </DialogDescription>
-        </DialogHeader>
+    <DialogContent className="max-h-[85vh] max-w-2xl flex flex-col overflow-hidden">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <Sparkles className="size-5 text-primary" />
+          Create Genie Space
+        </DialogTitle>
+        <DialogDescription>
+          Choose a build mode to generate your Genie Space. Progress will appear in a toast so you
+          can continue your conversation.
+        </DialogDescription>
+      </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {/* Choose build mode */}
-          {phase === "choose" && (
-            <div className="py-4">
-              <BuildModeSelector onSelect={handleModeSelect} tableCount={tables.length} />
-            </div>
-          )}
-
-          {/* Generating phase */}
-          {phase === "generating" && (
-            <div className="space-y-4 py-4">
-              <Progress value={genPercent} className="h-2" />
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
-                {genMessage}
-              </div>
-            </div>
-          )}
-
-          {/* Error phase */}
-          {phase === "error" && (
-            <div className="space-y-4 py-4">
-              <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-destructive">
-                  <AlertTriangle className="size-4" />
-                  {genError || "An error occurred"}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={runFastGeneration}>
-                  <RefreshCw className="mr-2 size-3.5" />
-                  Retry Quick Build
-                </Button>
-                <Button variant="outline" size="sm" onClick={runFullGeneration}>
-                  <Sparkles className="mr-2 size-3.5" />
-                  Try Full Engine
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Ready phase -- space summary */}
-          {phase === "ready" && recommendation && parsedSpace && (
-            <div className="space-y-4 py-2">
-              {/* Mode badge */}
-              <div className="flex items-center gap-2">
-                {resultMode === "fast" ? (
-                  <Badge variant="outline" className="gap-1 text-amber-600 dark:text-amber-400">
-                    <Zap className="size-3" />
-                    Quick Build
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="gap-1 text-green-600 dark:text-green-400">
-                    <Sparkles className="size-3" />
-                    Full Engine
-                  </Badge>
-                )}
-                {recommendation.quality && (
-                  <Badge variant="secondary" className="text-xs">
-                    Quality: {recommendation.quality.score}
-                  </Badge>
-                )}
-              </div>
-
-              {/* Title + description */}
-              <div>
-                <h3 className="text-sm font-semibold">{recommendation.title}</h3>
-                <p className="mt-0.5 text-xs text-muted-foreground">{recommendation.description}</p>
-              </div>
-
-              {/* Stat row */}
-              <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
-                <StatItem icon={Table2} label="Tables" value={recommendation.tableCount} />
-                <StatItem icon={BarChart3} label="Measures" value={recommendation.measureCount} />
-                <StatItem icon={Link2} label="Filters" value={recommendation.filterCount} />
-                <StatItem
-                  icon={MessageSquare}
-                  label="Dimensions"
-                  value={recommendation.dimensionCount}
-                />
-                <StatItem
-                  icon={FileText}
-                  label="Instructions"
-                  value={recommendation.instructionCount}
-                />
-                <StatItem icon={Link2} label="Joins" value={recommendation.joinCount} />
-                <StatItem
-                  icon={MessageSquare}
-                  label="Questions"
-                  value={recommendation.sampleQuestionCount}
-                />
-              </div>
-
-              {/* Quality warnings */}
-              {recommendation.quality && recommendation.quality.degradedReasons.length > 0 && (
-                <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-900/60 dark:bg-amber-950/30">
-                  <div className="flex items-center gap-2 text-xs font-medium">
-                    <AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400" />
-                    Quality warnings
-                  </div>
-                  <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
-                    {recommendation.quality.degradedReasons.map((reason) => (
-                      <li key={reason}>- {reason.replace(/_/g, " ")}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Collapsible details */}
-              <button
-                onClick={() => setShowDetails(!showDetails)}
-                className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-              >
-                {showDetails ? (
-                  <ChevronDown className="size-3.5" />
-                ) : (
-                  <ChevronRight className="size-3.5" />
-                )}
-                Details
-              </button>
-              {showDetails && (
-                <div className="space-y-3 rounded-md border bg-muted/30 p-3 text-xs">
-                  {/* Tables */}
-                  {parsedSpace.data_sources.tables.length > 0 && (
-                    <div>
-                      <p className="mb-1 font-medium">
-                        Tables ({parsedSpace.data_sources.tables.length})
-                      </p>
-                      <div className="space-y-0.5">
-                        {parsedSpace.data_sources.tables.map((t) => (
-                          <div
-                            key={t.identifier}
-                            className="flex items-center gap-1.5 font-mono text-[11px]"
-                          >
-                            <Table2 className="size-3 text-muted-foreground" />
-                            {t.identifier}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Joins */}
-                  {parsedSpace.instructions.join_specs.length > 0 && (
-                    <div>
-                      <p className="mb-1 font-medium">
-                        Joins ({parsedSpace.instructions.join_specs.length})
-                      </p>
-                      <div className="space-y-0.5">
-                        {parsedSpace.instructions.join_specs.map((j) => (
-                          <div key={j.id} className="font-mono text-[11px]">
-                            {j.left.identifier} ↔ {j.right.identifier}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Sample questions */}
-                  {parsedSpace.config.sample_questions.length > 0 && (
-                    <div>
-                      <p className="mb-1 font-medium">
-                        Sample Questions ({parsedSpace.config.sample_questions.length})
-                      </p>
-                      <ul className="space-y-0.5 text-muted-foreground">
-                        {parsedSpace.config.sample_questions.map((q) => (
-                          <li key={q.id}>{q.question.join(" ")}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Example SQL */}
-                  {parsedSpace.instructions.example_question_sqls.length > 0 && (
-                    <div>
-                      <p className="mb-1 font-medium">
-                        Example SQL ({parsedSpace.instructions.example_question_sqls.length})
-                      </p>
-                      <div className="space-y-1.5">
-                        {parsedSpace.instructions.example_question_sqls.slice(0, 4).map((q) => (
-                          <div key={q.id} className="rounded border bg-muted/50 p-1.5">
-                            <div className="font-medium">{q.question.join(" ")}</div>
-                            <code className="mt-0.5 block whitespace-pre-wrap text-[10px] text-muted-foreground">
-                              {q.sql.join("\n")}
-                            </code>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Metric view schema selector */}
-              {metricViewsServerEnabled &&
-                hasMetricViews &&
-                loadSettings().genieEngineDefaults.generateMetricViews && (
-                  <>
-                    <Separator />
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs font-medium">
-                            Metric Views (
-                            {mvProposals.filter((m) => m.validationStatus !== "error").length})
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">
-                            Choose a target schema for metric view deployment.
-                          </p>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => setShowSchemaSelector(!showSchemaSelector)}
-                        >
-                          {targetSchema[0] || defaultSchema || "Select schema"}
-                        </Button>
-                      </div>
-                      {showSchemaSelector && (
-                        <div className="max-h-48 overflow-y-auto rounded-md border">
-                          <CatalogBrowser
-                            selectedSources={targetSchema}
-                            onSelectionChange={handleSchemaChange}
-                            selectionMode="schema"
-                            defaultExpandPath={defaultSchema}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-            </div>
-          )}
-
-          {/* Deploying phase */}
-          {phase === "deploying" && (
-            <div className="flex items-center gap-3 py-8">
-              <Loader2 className="size-5 animate-spin text-primary" />
-              <span className="text-sm text-muted-foreground">
-                Creating Genie Space in Databricks...
-              </span>
-            </div>
-          )}
-
-          {/* Deployed phase */}
-          {phase === "deployed" && deployedSpaceId && (
-            <div className="space-y-4 py-4">
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                  <Check className="size-5 text-green-600 dark:text-green-400" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">
-                    {recommendation?.title ?? "Genie Space"} is live
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Ready for natural language queries.
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                {databricksHost && (
-                  <Button asChild className="flex-1">
-                    <a
-                      href={`${databricksHost}/genie/rooms/${deployedSpaceId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <ExternalLink className="mr-2 size-4" />
-                      Open in Databricks
-                    </a>
-                  </Button>
-                )}
-                <Button variant="outline" className="flex-1" asChild>
-                  <a href={`/genie/${deployedSpaceId}`}>View in Genie Studio</a>
-                </Button>
-              </div>
-            </div>
-          )}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="py-4">
+          <BuildModeSelector
+            onSelect={handleModeSelect}
+            tableCount={tables.length}
+            disabled={starting}
+          />
         </div>
 
-        {/* Footer actions */}
-        {phase === "ready" && recommendation && (
-          <DialogFooter className="flex-col gap-2 sm:flex-row">
-            {resultMode === "fast" && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={runFullGeneration}
-                    className="gap-1.5"
-                  >
-                    <RefreshCw className="size-3.5" />
-                    Enhance with Full Engine
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-xs text-xs">
-                  Run the full 7-pass Genie Engine for richer measures, filters, benchmarks, metric
-                  views, and higher quality scores. Typically takes 1-3 minutes.
-                </TooltipContent>
-              </Tooltip>
-            )}
-            <Button
-              onClick={handleDeploy}
-              variant={recommendation.quality?.gateDecision === "warn" ? "outline" : "default"}
-              className={`gap-1.5 ${recommendation.quality?.gateDecision === "warn" ? "border-amber-500 text-amber-600 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-400 dark:hover:bg-amber-950/30" : ""}`}
-            >
-              <Rocket className="size-3.5" />
-              {recommendation.quality?.gateDecision === "warn"
-                ? "Deploy with Warnings"
-                : "Deploy to Databricks"}
-            </Button>
-          </DialogFooter>
+        {startError && (
+          <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-destructive">
+              <AlertTriangle className="size-4" />
+              {startError}
+            </div>
+          </div>
         )}
-
-        {phase === "deployed" && (
-          <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        )}
-      </DialogContent>
-    </Dialog>
+      </div>
+    </DialogContent>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Exported wrapper -- conditionally mounts content when open
 // ---------------------------------------------------------------------------
 
-function StatItem({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: number;
-}) {
-  if (value === 0) return null;
+export function GenieBuilderModal({
+  open,
+  onOpenChange,
+  tables,
+  domain,
+  conversationSummary,
+  onBuildStarted,
+}: GenieBuilderModalProps) {
   return (
-    <div className="flex items-center gap-1">
-      <Icon className="size-3" />
-      <span>
-        {value} {label}
-      </span>
-    </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open && (
+        <GenieBuilderContent
+          onOpenChange={onOpenChange}
+          tables={tables}
+          domain={domain}
+          conversationSummary={conversationSummary}
+          onBuildStarted={onBuildStarted}
+        />
+      )}
+    </Dialog>
   );
 }

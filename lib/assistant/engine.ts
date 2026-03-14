@@ -104,17 +104,6 @@ export interface AssistantResponse {
   logId: string | null;
 }
 
-function enforceSourceCitations(answer: string, sources: SourceCard[]): string {
-  if (sources.length === 0) return answer;
-  if (/\[\d+\]/.test(answer)) return answer;
-
-  const sourceLines = sources
-    .slice(0, 3)
-    .map((s) => `[${s.index}] ${s.label} (${s.kind})`)
-    .join("\n");
-  return `${answer}\n\n### Sources\n${sourceLines}`;
-}
-
 export function inferTablesFromSqlBlocks(sqlBlocks: string[]): string[] {
   return extractTableFqnsFromText(sqlBlocks.join("\n"));
 }
@@ -230,7 +219,6 @@ export async function runAssistantEngine(
   if (context.lowConfidenceRetrieval) {
     answer = `${answer}\n\n### Confidence Note\nRetrieved context relevance is weak for this question. Validate critical decisions against source metadata before execution.`;
   }
-  answer = enforceSourceCitations(answer, sources);
   const sqlBlocks = extractSqlBlocks(answer);
 
   // --- Parallel post-stream: SQL validation, dashboard lookup, Genie RAG ---

@@ -921,6 +921,8 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
         case "benchmark_generation": {
           const { runBenchmarkGeneration } =
             await import("@/lib/genie/passes/benchmark-generation");
+          const FIX_TARGET_BENCHMARKS = 8;
+          const benchmarksPerBatch = FIX_TARGET_BENCHMARKS;
           const output = await runBenchmarkGeneration({
             tableFqns,
             metadata,
@@ -931,6 +933,7 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
             joinSpecs: spaceCtx.joinSpecs,
             referenceSql: spaceSql.referenceSql,
             endpoint,
+            benchmarksPerBatch,
           });
 
           if (output.benchmarks.length > 0) {
