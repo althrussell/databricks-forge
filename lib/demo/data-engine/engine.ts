@@ -171,6 +171,24 @@ export async function runDataEngine(
   const dimResults = await mapWithConcurrency(dimTasks, DIM_CONCURRENCY);
   tableResults.push(...dimResults);
 
+  // Filter dimension tables to only those that were successfully created.
+  // Failed dimensions (e.g. dim_date) must not appear in fact table prompts
+  // or the LLM will generate JOINs to non-existent tables.
+  const succeededDimNames = new Set(
+    dimResults.filter((r) => r.status === "completed").map((r) => r.name),
+  );
+  const successfulDimensions = dimensionTables.filter((d) => succeededDimNames.has(d.name));
+
+  if (successfulDimensions.length < dimensionTables.length) {
+    const failed = dimensionTables
+      .filter((d) => !succeededDimNames.has(d.name))
+      .map((d) => d.name);
+    log.warn("Excluding failed dimensions from fact generation context", {
+      failed,
+      remaining: successfulDimensions.map((d) => d.name),
+    });
+  }
+
   // =======================================================================
   // Pass 3: Fact Generation (fact/transaction tables -- wave-based)
   // =======================================================================
@@ -247,7 +265,7 @@ export async function runDataEngine(
         table,
         input.catalog,
         input.schema,
-        dimensionTables,
+        successfulDimensions,
         narratives,
         {
           customerName: input.research.customerName,

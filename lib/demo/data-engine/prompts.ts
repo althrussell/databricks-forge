@@ -24,6 +24,12 @@ export const DEMO_DATA_SQL_CONSTRAINTS = `
   NEVER follow with INSERT INTO -- all data must come from the SELECT.
 - Use fully qualified backtick-quoted names: \`catalog\`.\`schema\`.\`table\`
 - Fact tables MUST ONLY reference dimension tables, never other fact tables.
+- For date/calendar dimension tables: generate rows with DATE_ADD(DATE'2024-01-01', seq_id - 1).
+  Derive date parts using built-in functions: YEAR(), MONTH(), DAY(), QUARTER(),
+  DAYOFWEEK(), WEEKOFYEAR(), DAYOFYEAR(). Use DATE_FORMAT() ONLY with these safe
+  patterns: 'yyyy', 'MM', 'dd', 'HH', 'mm', 'ss', 'E', 'EEEE', 'MMM', 'MMMM'.
+  NEVER use 'u', 'e', 'c', or 'L' in DATE_FORMAT -- Spark does NOT support them
+  and will throw DATETIME_PATTERN_RECOGNITION errors.
 `;
 
 // ---------------------------------------------------------------------------

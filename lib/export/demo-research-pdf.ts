@@ -83,7 +83,7 @@ export async function generateDemoResearchPdf(
     const companyProfile = research.companyProfile;
     if (companyProfile) {
       y = sectionHeading(doc, y, "Company Overview");
-      if (companyProfile.statedPriorities.length > 0) {
+      if (companyProfile.statedPriorities?.length) {
         doc.fontSize(12).fillColor(PDF.DB_DARK).font("Helvetica-Bold").text("Stated Priorities", M, y);
         y = doc.y + 4;
         for (const p of companyProfile.statedPriorities) {
@@ -92,7 +92,7 @@ export async function generateDemoResearchPdf(
         }
         y += 4;
       }
-      if (companyProfile.inferredPriorities.length > 0) {
+      if (companyProfile.inferredPriorities?.length) {
         doc.fontSize(12).fillColor(PDF.DB_DARK).font("Helvetica-Bold").text("Inferred Priorities", M, y);
         y = doc.y + 4;
         for (const p of companyProfile.inferredPriorities) {
@@ -101,7 +101,7 @@ export async function generateDemoResearchPdf(
         }
         y += 4;
       }
-      if (companyProfile.urgencySignals.length > 0) {
+      if (companyProfile.urgencySignals?.length) {
         doc.fontSize(12).fillColor(PDF.DB_DARK).font("Helvetica-Bold").text("Urgency Signals", M, y);
         y = doc.y + 4;
         for (const s of companyProfile.urgencySignals) {
@@ -117,18 +117,18 @@ export async function generateDemoResearchPdf(
       const swot = companyProfile.swotSummary;
       y = sectionHeading(doc, y, "SWOT Analysis");
       doc.fontSize(10).fillColor(PDF.TEXT_COLOR).font("Helvetica");
-      doc.text(`Strengths: ${swot.strengths.join("; ")}`, M, y, { width: CW / 2 - 10 });
-      doc.text(`Weaknesses: ${swot.weaknesses.join("; ")}`, M + CW / 2 + 5, y, { width: CW / 2 - 10 });
+      doc.text(`Strengths: ${(swot.strengths ?? []).join("; ")}`, M, y, { width: CW / 2 - 10 });
+      doc.text(`Weaknesses: ${(swot.weaknesses ?? []).join("; ")}`, M + CW / 2 + 5, y, { width: CW / 2 - 10 });
       y = doc.y + 8;
-      doc.text(`Opportunities: ${swot.opportunities.join("; ")}`, M, y, { width: CW / 2 - 10 });
-      doc.text(`Threats: ${swot.threats.join("; ")}`, M + CW / 2 + 5, y, { width: CW / 2 - 10 });
+      doc.text(`Opportunities: ${(swot.opportunities ?? []).join("; ")}`, M, y, { width: CW / 2 - 10 });
+      doc.text(`Threats: ${(swot.threats ?? []).join("; ")}`, M + CW / 2 + 5, y, { width: CW / 2 - 10 });
       y = doc.y + 12;
     }
 
     const industryLandscape = research.industryLandscape;
     if (industryLandscape) {
       y = sectionHeading(doc, y, "Industry Landscape");
-      if (industryLandscape.marketForces.length > 0) {
+      if (industryLandscape.marketForces?.length) {
         const w = [CW * 0.25, CW * 0.55, CW * 0.2];
         doc.save().rect(M, y, CW, 22).fill(PDF.DB_DARK).restore();
         doc.fontSize(9).fillColor(PDF.WHITE).font("Helvetica-Bold");
@@ -149,7 +149,7 @@ export async function generateDemoResearchPdf(
       }
     }
 
-    if (industryLandscape?.keyBenchmarks && industryLandscape.keyBenchmarks.length > 0) {
+    if (industryLandscape?.keyBenchmarks?.length) {
       y = sectionHeading(doc, y, "Key Benchmarks");
       const w = [CW / 3, CW / 3, CW / 3];
       doc.save().rect(M, y, CW, 22).fill(PDF.DB_DARK).restore();
@@ -165,7 +165,7 @@ export async function generateDemoResearchPdf(
     }
 
     const dataStrategy = research.dataStrategy;
-    if (dataStrategy && dataStrategy.assetDetails.length > 0) {
+    if (dataStrategy?.assetDetails?.length) {
       y = sectionHeading(doc, y, "Data Strategy");
       const w = [CW * 0.15, CW * 0.15, CW * 0.5, CW * 0.2];
       doc.save().rect(M, y, CW, 22).fill(PDF.DB_DARK).restore();
