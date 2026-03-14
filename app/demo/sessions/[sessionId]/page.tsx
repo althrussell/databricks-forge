@@ -106,19 +106,41 @@ export default function DemoSessionPage() {
   useEffect(() => {
     if (!sessionId) return;
     let cancelled = false;
-    (async () => {
+    let retryCount = 0;
+    const MAX_RETRIES = 5;
+    const RETRY_DELAY_MS = 2000;
+
+    const fetchSession = async () => {
       try {
         const r = await fetch(`/api/demo/sessions/${sessionId}`);
         if (cancelled) return;
         if (!r.ok) throw new Error(r.status === 404 ? "Session not found" : "Failed to load");
         const data = await r.json();
-        if (!cancelled) setSession(data);
+        if (cancelled) return;
+
+        if (
+          !data.research &&
+          retryCount < MAX_RETRIES &&
+          ["draft", "generating", "completed"].includes(data.status)
+        ) {
+          retryCount++;
+          setTimeout(() => {
+            if (!cancelled) fetchSession();
+          }, RETRY_DELAY_MS);
+          return;
+        }
+
+        setSession(data);
+        setLoading(false);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : String(e));
+          setLoading(false);
+        }
       }
-    })();
+    };
+
+    fetchSession();
     return () => { cancelled = true; };
   }, [sessionId]);
 
@@ -128,8 +150,9 @@ export default function DemoSessionPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[200px] items-center justify-center">
+      <div className="flex min-h-[200px] flex-col items-center justify-center gap-3">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <p className="text-sm text-muted-foreground">Loading research data...</p>
       </div>
     );
   }

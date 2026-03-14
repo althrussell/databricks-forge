@@ -6,7 +6,7 @@
  */
 
 import { resolveEndpoint } from "@/lib/dbx/client";
-import { buildTableCommentDDL, buildColumnCommentDDL } from "@/lib/ai/comment-applier";
+import { buildTableCommentDDL, buildBatchColumnCommentDDL } from "@/lib/ai/comment-applier";
 import type { LLMClient } from "@/lib/ports/llm-client";
 import type { SqlExecutor } from "@/lib/ports/sql-executor";
 import type { Logger } from "@/lib/ports/logger";
@@ -96,18 +96,8 @@ export async function runSeedGeneration(
   // Apply table and column comments
   await applyComments(table, catalog, schema, sql, log);
 
-  // Verify row count
-  try {
-    const countResult = await sql.executeScalar<string>(
-      `SELECT COUNT(*) FROM \`${catalog}\`.\`${schema}\`.\`${table.name}\``,
-    );
-    const rowCount = parseInt(countResult ?? "0", 10);
-    onPhase?.("completed");
-    return { rowCount };
-  } catch {
-    onPhase?.("completed");
-    return { rowCount: table.rowTarget };
-  }
+  onPhase?.("completed");
+  return { rowCount: table.rowTarget };
 }
 
 async function applyComments(
@@ -122,10 +112,11 @@ async function applyComments(
     if (table.description) {
       await sql.execute(buildTableCommentDDL(fqn, table.description));
     }
-    for (const col of table.columns) {
-      if (col.description) {
-        await sql.execute(buildColumnCommentDDL(fqn, col.name, col.description));
-      }
+    const columnsWithComments = table.columns
+      .filter((c) => c.description)
+      .map((c) => ({ columnName: c.name, comment: c.description }));
+    if (columnsWithComments.length > 0) {
+      await sql.execute(buildBatchColumnCommentDDL(fqn, columnsWithComments));
     }
   } catch (err) {
     log.warn("Failed to apply comments (non-fatal)", {

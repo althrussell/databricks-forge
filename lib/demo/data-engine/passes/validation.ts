@@ -5,6 +5,7 @@
  * and distribution checks. No LLM calls -- pure SQL.
  */
 
+import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import type { SqlExecutor } from "@/lib/ports/sql-executor";
 import type { Logger } from "@/lib/ports/logger";
 import type { TableDesign, ValidationResult, ValidationSummary } from "../../types";
@@ -19,10 +20,10 @@ export async function runValidation(
   },
 ): Promise<ValidationSummary> {
   const { sql, logger: log } = opts;
-  const results: ValidationResult[] = [];
-  const issues: string[] = [];
 
-  for (const table of tables) {
+  const VALIDATION_CONCURRENCY = 6;
+
+  const validateTable = async (table: TableDesign): Promise<ValidationResult> => {
     const fqn = `\`${catalog}\`.\`${schema}\`.\`${table.name}\``;
     const result: ValidationResult = {
       tableName: table.name,
@@ -76,8 +77,16 @@ export async function runValidation(
       result.distributionQuality = result.issues.length > 2 ? "poor" : "acceptable";
     }
 
-    results.push(result);
-    issues.push(...result.issues.map((i) => `${table.name}: ${i}`));
+    return result;
+  };
+
+  const results = await mapWithConcurrency(
+    tables.map((t) => () => validateTable(t)),
+    VALIDATION_CONCURRENCY,
+  );
+  const issues: string[] = [];
+  for (const result of results) {
+    issues.push(...result.issues.map((i) => `${result.tableName}: ${i}`));
   }
 
   const summary: ValidationSummary = {

@@ -49,7 +49,7 @@ export function CatalogSelectionStep({
   const handleSchemaSelection = useCallback(
     (sources: string[]) => {
       if (sources.length > 0) {
-        const parts = sources[0].split(".");
+        const parts = sources[sources.length - 1].split(".");
         if (parts.length >= 2) {
           onCatalogChange(parts[0]);
           onSchemaChange(parts[1]);

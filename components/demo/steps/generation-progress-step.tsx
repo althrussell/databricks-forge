@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
   AlertCircle,
@@ -10,11 +10,14 @@ import {
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { DataJobStatus } from "@/lib/demo/data-engine/types";
 import type { TablePhase } from "@/lib/demo/types";
 
 interface GenerationProgressStepProps {
   sessionId: string;
+  onComplete?: () => void;
+  onRetryNeeded?: (failedTables: string[]) => void;
 }
 
 const PHASE_LABELS: Record<TablePhase, { label: string; icon: React.ReactNode }> = {
@@ -30,8 +33,13 @@ const PHASE_LABELS: Record<TablePhase, { label: string; icon: React.ReactNode }>
   failed: { label: "Failed", icon: <AlertCircle className="h-3 w-3 text-destructive" /> },
 };
 
-export function GenerationProgressStep({ sessionId }: GenerationProgressStepProps) {
+export function GenerationProgressStep({
+  sessionId,
+  onComplete,
+  onRetryNeeded,
+}: GenerationProgressStepProps) {
   const [status, setStatus] = useState<DataJobStatus | null>(null);
+  const completedRef = useRef(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -42,8 +50,15 @@ export function GenerationProgressStep({ sessionId }: GenerationProgressStepProp
         const data: DataJobStatus = await resp.json();
         setStatus(data);
 
+        if (data.status === "generating") {
+          completedRef.current = false;
+        }
         if (data.status === "completed" || data.status === "failed") {
           clearInterval(interval);
+          if (data.status === "completed" && !completedRef.current) {
+            completedRef.current = true;
+            onComplete?.();
+          }
         }
       } catch {
         // retry
@@ -51,7 +66,7 @@ export function GenerationProgressStep({ sessionId }: GenerationProgressStepProp
     }, 2_000);
 
     return () => clearInterval(interval);
-  }, [sessionId]);
+  }, [sessionId, onComplete]);
 
   if (!status) {
     return (
@@ -62,18 +77,18 @@ export function GenerationProgressStep({ sessionId }: GenerationProgressStepProp
     );
   }
 
-  if (status.status === "failed") {
-    return (
-      <div className="text-center py-12">
-        <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
-        <p className="text-destructive font-medium">Generation failed</p>
-        <p className="text-sm text-muted-foreground mt-1">{status.error}</p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6 px-1">
+      {status.status === "failed" && status.error && (
+        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-destructive">Generation failed</p>
+            <p className="text-sm text-muted-foreground mt-0.5">{status.error}</p>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">{status.message}</span>
@@ -111,6 +126,38 @@ export function GenerationProgressStep({ sessionId }: GenerationProgressStepProp
               </div>
             );
           })}
+        </div>
+      )}
+
+      {(status.status === "completed" || status.status === "failed") && status.tableStatuses.length > 0 && (
+        <div className="rounded-md border p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">
+                {status.tableStatuses.filter((t) => t.phase === "completed").length} of{" "}
+                {status.totalTables} tables created successfully
+              </p>
+              {status.tableStatuses.some((t) => t.phase === "failed") && (
+                <p className="text-sm text-destructive mt-1">
+                  {status.tableStatuses.filter((t) => t.phase === "failed").length} tables failed
+                </p>
+              )}
+            </div>
+            {status.tableStatuses.some((t) => t.phase === "failed") && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const failedNames = status.tableStatuses
+                    .filter((t) => t.phase === "failed")
+                    .map((t) => t.tableName);
+                  onRetryNeeded?.(failedNames);
+                }}
+              >
+                Retry Failed Tables
+              </Button>
+            )}
+          </div>
         </div>
       )}
     </div>
