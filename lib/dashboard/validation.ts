@@ -31,6 +31,32 @@ export async function validateDatasetSql(sql: string, datasetName: string): Prom
 }
 
 // ---------------------------------------------------------------------------
+// Static GROUP BY Lint
+// ---------------------------------------------------------------------------
+
+const AGGREGATE_RE = /\b(COUNT|SUM|AVG|MIN|MAX)\s*\(/i;
+const GROUP_BY_RE = /\bGROUP\s+BY\b/i;
+const HAVING_RE = /\bHAVING\b/i;
+
+/**
+ * Heuristic check: if the outermost SELECT contains aggregate functions but
+ * no GROUP BY clause, flag it. This catches CROSS JOIN + aggregate patterns
+ * that EXPLAIN may miss or that appear at runtime.
+ *
+ * Returns a warning string if the issue is detected, null otherwise.
+ */
+export function lintMissingGroupBy(sql: string): string | null {
+  if (!AGGREGATE_RE.test(sql)) return null;
+  if (GROUP_BY_RE.test(sql)) return null;
+  if (HAVING_RE.test(sql)) return null;
+
+  return (
+    "SQL uses aggregate functions (COUNT/SUM/AVG/MIN/MAX) without GROUP BY. " +
+    "Add GROUP BY for all non-aggregated columns or wrap non-aggregated values in an aggregate."
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Metric View SQL Validation
 // ---------------------------------------------------------------------------
 

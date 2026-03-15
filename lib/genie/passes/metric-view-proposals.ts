@@ -1464,7 +1464,13 @@ export function autoFixMaterializationRefs(
 // ---------------------------------------------------------------------------
 
 const VALID_MEASURE_FIELDS = new Set([
-  "name", "expr", "display_name", "comment", "synonyms", "format", "window",
+  "name",
+  "expr",
+  "display_name",
+  "comment",
+  "synonyms",
+  "format",
+  "window",
 ]);
 
 /**
@@ -1490,11 +1496,12 @@ export function sanitizeMetricViewYaml(yaml: string): string {
     const matBlock = out.slice(matIdx);
     const hasViews = /materialized_views\s*:/.test(matBlock);
     const allHaveType =
-      hasViews && !/- name:\s*\w+\s*\n(?!\s*type:)/.test(
+      hasViews &&
+      !/- name:\s*\w+\s*\n(?!\s*type:)/.test(
         matBlock.slice(matBlock.indexOf("materialized_views")),
       );
     if (!hasViews || !allHaveType) {
-      const nextTopLevel = matBlock.slice(1).search(/^\S/m);
+      const nextTopLevel = matBlock.search(/\n(?=\S)/);
       if (nextTopLevel !== -1) {
         out = out.slice(0, matIdx) + matBlock.slice(nextTopLevel + 1);
       } else {
@@ -1507,18 +1514,18 @@ export function sanitizeMetricViewYaml(yaml: string): string {
   const measIdx = out.indexOf("measures:");
   if (measIdx !== -1) {
     const afterMeas = out.slice(measIdx);
-    const nextSection = afterMeas.slice(1).search(/^[a-z]/m);
-    const measBlock = nextSection !== -1 ? afterMeas.slice(0, nextSection + 1) : afterMeas;
-    const cleaned = measBlock.replace(
-      /^(\s+)(\w+):/gm,
-      (line: string, indent: string, field: string) => {
+    const nextSection = afterMeas.search(/\n(?=[a-z])/);
+    const measBlock = nextSection !== -1 ? afterMeas.slice(0, nextSection) : afterMeas;
+    const cleaned = measBlock
+      .replace(/^(\s+)(\w+):/gm, (line: string, indent: string, field: string) => {
         if (field === "measures") return line;
         if (VALID_MEASURE_FIELDS.has(field) || field === "-") return line;
         if (indent.length >= 4 && !VALID_MEASURE_FIELDS.has(field)) return "";
         return line;
-      },
-    ).replace(/\n{3,}/g, "\n\n");
-    out = out.slice(0, measIdx) + cleaned + (nextSection !== -1 ? afterMeas.slice(nextSection + 1) : "");
+      })
+      .replace(/\n{3,}/g, "\n\n");
+    out =
+      out.slice(0, measIdx) + cleaned + (nextSection !== -1 ? afterMeas.slice(nextSection) : "");
   }
 
   return out;
@@ -1577,6 +1584,7 @@ Rules:
 - DIMENSION NAME COLLISION: A dimension \`name\` MUST NOT match a join alias \`name\`. If a join alias is \`claim_type\`, rename the dimension to \`claim_type_name\` or similar. Matching names cause INVALID_EXTRACT_BASE_FIELD_TYPE because the dimension shadows the join alias.
 - Measure \`name\` MUST be snake_case (no spaces) and MUST NOT be identical to any source column name (causes NESTED_AGGREGATE_FUNCTION). If the column is \`total_complaints\`, name the measure \`total_complaints_total\` or \`complaint_volume\`. Add a \`display_name\` for the human-readable label.
 - When column names contain spaces, backtick-quote them: \`\\\`Defaulted Loans\\\`\`, \`source.\\\`Loan Origination Month\\\`\`.
+- MATERIALIZATION BLOCK: If the error mentions "materialization" or "materialized_views", either (a) include a complete \`materialization:\` block with a \`materialized_views:\` list where each entry has both \`name\` and \`type\` fields, or (b) REMOVE the \`materialization:\` block entirely. An incomplete materialization block (missing \`materialized_views:\` or missing \`type\` on entries) will always fail.
 - Return the SAME JSON format: { "yaml": "...", "ddl": "..." }
 
 ${schemaBlock}

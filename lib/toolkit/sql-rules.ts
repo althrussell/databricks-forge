@@ -38,6 +38,7 @@ Identifier quoting:
 - Table names should use fully-qualified three-part names: catalog.schema.table
 
 Query structure:
+- When mixing aggregate functions (COUNT, SUM, AVG, MIN, MAX) with non-aggregated columns in SELECT, you MUST include a GROUP BY clause listing every non-aggregated column -- even when CROSS JOINing a single-row CTE or subquery. The SQL analyzer cannot infer cardinality and will reject the query with MISSING_GROUP_BY.
 - For top-N queries, ALWAYS use ORDER BY ... LIMIT N. NEVER use RANK() or DENSE_RANK() for top-N because ties can return more than N rows. ANY query with ORDER BY that ranks, sorts by a metric, or serves as a preview MUST include LIMIT.
 - Use QUALIFY for per-group deduplication (e.g. latest row per customer), NOT for top-N lists.
 - NEVER use aggregate functions (SUM, AVG, COUNT, MIN, MAX) in the same SELECT block as QUALIFY. QUALIFY operates before GROUP BY, so aggregates are invalid in that context. Split into two CTEs: first CTE uses QUALIFY for row-level deduplication on raw columns, second CTE aggregates the result.
