@@ -135,10 +135,13 @@ class PoolRateLimiter {
     const lim = this.limiters.get(endpoint);
     if (lim) {
       lim.semaphore.release();
-      // Success clears backoff: reset consecutive counter and lift block early
+      // Gradual cooldown: decrement rather than reset so the backoff tier
+      // decreases smoothly under sustained load instead of oscillating.
       if (lim.consecutive429s > 0) {
-        lim.consecutive429s = 0;
-        lim.blockedUntil = 0;
+        lim.consecutive429s = Math.max(0, lim.consecutive429s - 1);
+        if (lim.consecutive429s === 0) {
+          lim.blockedUntil = 0;
+        }
       }
     }
     if (this.globalSemaphore) this.globalSemaphore.release();

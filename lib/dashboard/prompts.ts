@@ -206,6 +206,9 @@ export function buildDashboardDesignPrompt(input: DashboardPromptInput): string 
   sections.push("- KPI dataset must return exactly 1 row");
   sections.push("- Trend dataset must include a date column");
   sections.push("- Breakdown dataset should use GROUP BY with ORDER BY and LIMIT 10");
+  sections.push(
+    "- When mixing aggregate functions (COUNT, SUM, AVG) with non-aggregated columns, you MUST include GROUP BY for every non-aggregated column, even when CROSS JOINing a single-row CTE.",
+  );
   sections.push("- Always validate that each query can run standalone with no syntax errors.");
   sections.push("");
   sections.push("### Widget Fields");

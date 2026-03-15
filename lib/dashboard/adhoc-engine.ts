@@ -24,7 +24,7 @@ import { fetchTableInfoBatch, fetchColumnsBatch } from "@/lib/queries/metadata";
 import { buildSchemaAllowlist, validateSqlExpression } from "@/lib/genie/schema-allowlist";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
-import { validateDatasetSql } from "./validation";
+import { validateDatasetSql, lintMissingGroupBy } from "./validation";
 import { createDashboard, publishDashboard } from "@/lib/dbx/dashboards";
 import { resolveEndpoint, getConfig, isReviewEnabled } from "@/lib/dbx/client";
 import { createScopedLogger } from "@/lib/logger";
@@ -356,6 +356,17 @@ export async function runAdHocDashboardEngine(
       throw new Error("All dashboard datasets were rejected by SQL review");
     }
   }
+
+  // Static lint: catch missing GROUP BY before EXPLAIN round-trip
+  design.datasets = design.datasets.filter((ds) => {
+    if (!ds.sql) return true;
+    const lint = lintMissingGroupBy(ds.sql);
+    if (lint) {
+      log.warn("Adhoc Dashboard: static GROUP BY lint failed", { dataset: ds.name, lint });
+      return false;
+    }
+    return true;
+  });
 
   // EXPLAIN validation: dry-run each dataset SQL to catch planning errors
   const explainResults = await Promise.all(

@@ -11,7 +11,8 @@
  * errors with a jittered backoff (Retry-After from response, else 60s).
  *
  * Pool-aware fallback: on 429 exhaustion, rotates through same-tier endpoints
- * from the model registry rather than the old static fallback list.
+ * first (when a tier hint is provided), then the full model pool, then the
+ * legacy static fallback list.
  *
  * TTL: 15 minutes. Max entries: 500.
  */
@@ -25,7 +26,8 @@ import {
 } from "@/lib/dbx/model-serving";
 import { addJitter, DEFAULT_429_BACKOFF_MS } from "@/lib/dbx/rate-limiter";
 import { getFallbackEndpoint } from "@/lib/dbx/client";
-import { getModelPool } from "@/lib/dbx/model-registry";
+import { getModelPool, type TaskTier } from "@/lib/dbx/model-registry";
+import { getFallbacksForTier } from "@/lib/dbx/task-router";
 import { createScopedLogger } from "@/lib/logger";
 
 const log = createScopedLogger({ origin: "Infra", module: "toolkit/llm-cache" });
@@ -136,10 +138,11 @@ function getRetryAfterMs(error: unknown): number {
 
 /**
  * Build an ordered list of fallback endpoints to try when the primary is
- * exhausted. Uses the model pool registry first, then falls back to the
- * legacy getFallbackEndpoint + DATABRICKS_FALLBACK_ENDPOINTS.
+ * exhausted. When a tier is provided, same-tier endpoints are listed first
+ * to avoid routing cheap classification tasks to expensive reasoning models.
+ * Falls back to the full model pool, then legacy endpoints.
  */
-function buildEndpointPool(currentEndpoint: string): string[] {
+function buildEndpointPool(currentEndpoint: string, tier?: TaskTier): string[] {
   const pool: string[] = [];
   const seen = new Set<string>([currentEndpoint]);
 
@@ -150,7 +153,14 @@ function buildEndpointPool(currentEndpoint: string): string[] {
     }
   };
 
-  // Pool-aware: add all endpoints from the model registry
+  // Tier-aware: prefer same-tier endpoints first
+  if (tier) {
+    for (const ep of getFallbacksForTier(tier, currentEndpoint)) {
+      addIfDistinct(ep);
+    }
+  }
+
+  // Then add remaining endpoints from the full model pool
   for (const ep of getModelPool()) {
     addIfDistinct(ep.name);
   }
@@ -177,6 +187,7 @@ function buildEndpointPool(currentEndpoint: string): string[] {
 
 async function chatCompletionWithRetry(
   options: ChatCompletionOptions,
+  tier?: TaskTier,
 ): Promise<ChatCompletionResponse> {
   let lastError: Error | null = null;
   let rateLimitHits = 0;
@@ -253,7 +264,7 @@ async function chatCompletionWithRetry(
   }
 
   if (exhausted429) {
-    const pool = buildEndpointPool(options.endpoint);
+    const pool = buildEndpointPool(options.endpoint, tier);
     for (const alt of pool) {
       log.warn("LLM rotating to alternate endpoint", {
         from: options.endpoint,
@@ -304,9 +315,15 @@ async function chatCompletionWithRetry(
  * Cache-aware wrapper around chatCompletion with automatic retry.
  * Returns a cached response when an identical request was made within
  * the TTL window. Retries on 429/5xx with jittered exponential backoff.
+ *
+ * @param tier  Optional task tier hint for tier-aware fallback rotation.
+ *              When provided, same-tier endpoints are tried first on 429
+ *              exhaustion rather than rotating to arbitrary (potentially
+ *              expensive) models.
  */
 export async function cachedChatCompletion(
   options: ChatCompletionOptions,
+  tier?: TaskTier,
 ): Promise<ChatCompletionResponse> {
   evictExpired();
 
@@ -320,7 +337,7 @@ export async function cachedChatCompletion(
   }
 
   _stats.misses++;
-  const response = await chatCompletionWithRetry(options);
+  const response = await chatCompletionWithRetry(options, tier);
 
   // Never cache empty responses -- they'd poison subsequent calls
   if (!response.content) {

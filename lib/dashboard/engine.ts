@@ -28,7 +28,7 @@ import { buildSchemaAllowlist, validateSqlExpression } from "@/lib/genie/schema-
 import { reviewAndFixSql as defaultReviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled as defaultIsReviewEnabled, resolveEndpoint } from "@/lib/dbx/client";
 import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
-import { validateDatasetSql } from "./validation";
+import { validateDatasetSql, lintMissingGroupBy } from "./validation";
 import { logger as defaultLogger } from "@/lib/logger";
 import type { Logger } from "@/lib/ports/logger";
 import type { LLMClient } from "@/lib/ports/llm-client";
@@ -299,6 +299,17 @@ async function processDomain(
       return null;
     }
   }
+
+  // Static lint: catch missing GROUP BY before EXPLAIN round-trip
+  parsed.datasets = parsed.datasets.filter((ds) => {
+    if (!ds.sql) return true;
+    const lint = lintMissingGroupBy(ds.sql);
+    if (lint) {
+      log.warn("Dashboard Engine: static GROUP BY lint failed", { dataset: ds.name, lint });
+      return false;
+    }
+    return true;
+  });
 
   // EXPLAIN validation: dry-run each dataset SQL to catch planning errors
   const explainResults = await Promise.all(
